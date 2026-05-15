@@ -1,0 +1,5 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+ib-insync>=0.9.86
+pydantic>=2.0
+aiofiles>=23.0
