@@ -1,0 +1,57 @@
+# Hermes Agent Configuration
+# 生成时间：2026-05-15
+# 更新：增加 WebBridge 支持、Kimi Code Provider
+
+model:
+  default: claude-sonnet-4-6
+  provider: anthropic
+  base_url: https://api.kimi.com/coding/
+  context_length: 200000
+
+# ── API Server（供编排层调用）──────────────────────
+api_server:
+  enabled: true
+  host: 0.0.0.0
+  # API key 由环境变量 API_SERVER_KEY 注入
+  # 端点：http://localhost:{PORT}/v1/chat/completions
+
+# ── 工具配置 ──────────────────────────────────────
+tools:
+  enabled:
+    - web_search        # Tavily 搜索（公开资源）
+    - browser           # Playwright 浏览器（容器内）
+    - terminal          # ipython / bash 执行（用于调用 WebBridge 客户端）
+    - file              # 文件读写
+    - memory            # memory_space_edits
+    - vision            # 图像分析
+
+terminal:
+  backend: local
+  timeout: 600         # 文献调研可能需要较长时间
+  allowed_commands:
+    - python3
+    - pip
+    - ls
+    - cat
+    - mkdir
+    - curl
+
+# ── 记忆配置 ──────────────────────────────────────
+memory:
+  enabled: true
+  type: sqlite
+
+# ── 技能（Skills）────────────────────────────────
+skills:
+  auto_learn: true
+  hub:
+    enabled: false
+
+# ── WebBridge 环境变量（供 terminal 脚本使用）──────
+# 这些环境变量由 docker-compose.yml 注入
+# WEBBRIDGE_HOST=host.docker.internal
+# WEBBRIDGE_PORT=10086
+
+# ── 审批配置（无人值守模式）──────────────────────
+approvals:
+  mode: off

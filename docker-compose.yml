@@ -1,0 +1,163 @@
+version: "3.9"
+
+services:
+  # ── Data Router（IB Gateway 数据网关）────────────────────────
+  data-router:
+    build: ./data_router
+    container_name: quant-data-router
+    ports:
+      - "8888:8888"
+    environment:
+      - TWS_HOST=host.docker.internal
+      - TWS_PORT=7497
+      - TWS_CLIENT_ID=100
+      - CACHE_DB=/app/cache/data_cache.db
+    volumes:
+      - ./data_router/cache:/app/cache
+      - ./shared_workspace:/workspace
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ── 5 个 Hermes Agent ──────────────────────────────
+  hermes-hypothesis:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-hypothesis
+    ports:
+      - "8642:8642"
+    volumes:
+      - ./agent_configs/hypothesis:/opt/data
+      - ./shared_workspace:/workspace
+    environment:
+      - HERMES_AUTH_TOKEN=change-me-hypothesis
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=sk-hypothesis-local
+      # Kimi Code (Anthropic API 兼容端点)
+      - ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # Tavily 搜索（保留）
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      # WebBridge（供 terminal 脚本调用）
+      - WEBBRIDGE_HOST=host.docker.internal
+      - WEBBRIDGE_PORT=10086
+      - PORT=8642
+      - HERMES_PROFILE=hypothesis
+      - HERMES_YOLO_MODE=1
+    depends_on:
+      - data-router
+    command: ["hermes", "gateway", "run", "--accept-hooks"]
+    restart: unless-stopped
+
+  hermes-data:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-data
+    ports:
+      - "8643:8642"
+    volumes:
+      - ./agent_configs/data_engineer:/opt/data
+      - ./shared_workspace:/workspace
+    environment:
+      - HERMES_AUTH_TOKEN=change-me-data
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=sk-data-local
+      - ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WEBBRIDGE_HOST=host.docker.internal
+      - WEBBRIDGE_PORT=10086
+      - PORT=8642
+      - HERMES_PROFILE=data_engineer
+      - HERMES_YOLO_MODE=1
+    depends_on:
+      - data-router
+    command: ["hermes", "gateway", "run", "--accept-hooks"]
+    restart: unless-stopped
+
+  hermes-quant:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-quant
+    ports:
+      - "8644:8642"
+    volumes:
+      - ./agent_configs/quant_analyst:/opt/data
+      - ./shared_workspace:/workspace
+    environment:
+      - HERMES_AUTH_TOKEN=change-me-quant
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=sk-quant-local
+      - ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WEBBRIDGE_HOST=host.docker.internal
+      - WEBBRIDGE_PORT=10086
+      - PORT=8642
+      - HERMES_PROFILE=quant_analyst
+      - HERMES_YOLO_MODE=1
+    depends_on:
+      - data-router
+    command: ["hermes", "gateway", "run", "--accept-hooks"]
+    restart: unless-stopped
+
+  hermes-risk:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-risk
+    ports:
+      - "8645:8642"
+    volumes:
+      - ./agent_configs/risk_auditor:/opt/data
+      - ./shared_workspace:/workspace
+    environment:
+      - HERMES_AUTH_TOKEN=change-me-risk
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=sk-risk-local
+      - ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WEBBRIDGE_HOST=host.docker.internal
+      - WEBBRIDGE_PORT=10086
+      - PORT=8642
+      - HERMES_PROFILE=risk_auditor
+      - HERMES_YOLO_MODE=1
+    depends_on:
+      - data-router
+    command: ["hermes", "gateway", "run", "--accept-hooks"]
+    restart: unless-stopped
+
+  hermes-writer:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-writer
+    ports:
+      - "8646:8642"
+    volumes:
+      - ./agent_configs/strategy_writer:/opt/data
+      - ./shared_workspace:/workspace
+    environment:
+      - HERMES_AUTH_TOKEN=change-me-writer
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=sk-writer-local
+      - ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WEBBRIDGE_HOST=host.docker.internal
+      - WEBBRIDGE_PORT=10086
+      - PORT=8642
+      - HERMES_PROFILE=strategy_writer
+      - HERMES_YOLO_MODE=1
+    depends_on:
+      - data-router
+    command: ["hermes", "gateway", "run", "--accept-hooks"]
+    restart: unless-stopped
+
+  # ── 可选：Redis 用于编排层状态 ──────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: quant-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:

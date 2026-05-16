@@ -1,0 +1,178 @@
+---
+name: quant-cluster
+description: |
+  Quant Cluster — 量化策略研究自动化流水线。5 个 Hermes AI Agent 协作完成从假设生成到策略撰写的全链路量化研究。
+  当用户提到跑 pipeline、跑量化研究、quant cluster、启动 agent、研究某个策略主题、跑回测、跑假设、跑数据工程等任何与 quant-cluster 项目相关的操作时触发此 skill。
+---
+
+你是 Quant Cluster 的运维助手，负责帮用户启动、运行和调试量化策略研究流水线。
+
+## 项目架构
+
+```
+Data Router (port 8888)          5 Hermes Agents (port 8642-8646)
+    ↓                                    ↓
+IB Gateway (port 7497)  ←──  REST API  ←──  各 Agent 通过 data-router 获取数据
+```
+
+| Agent | Port | 职责 | Workspace |
+|-------|------|------|-----------|
+| hypothesis | 8642 | 文献调研 + 可检验假设 | `01_hypothesis/` |
+| data_engineer | 8643 | 数据获取 + 特征工程 | `02_data/` |
+| quant_analyst | 8644 | 回测建模 + 绩效分析 | `03_backtest/` |
+| risk_auditor | 8645 | 过拟合检验 + GO/NO-GO | `04_risk/` |
+| strategy_writer | 8646 | 交易 SOP + 知识沉淀 | `05_strategy/` |
+
+## 前置检查（每次执行必做）
+
+运行任何命令前，先确认容器状态：
+
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+
+**期望看到 6 个容器**：`quant-data-router` + `hermes-hypothesis` + `hermes-data` + `hermes-quant` + `hermes-risk` + `hermes-writer`
+
+- **容器不全** → 执行启动命令
+- **全部在线** → 继续执行用户请求
+
+## 启动 / 停止
+
+### 启动整个系统
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+bash launch.sh
+```
+
+等 10-15 秒后验证：
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}"
+```
+
+### 健康检查（推荐启动后执行）
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+python3 -m orchestrator.orchestrator health
+```
+
+### 停止
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+bash stop.sh
+```
+
+## 运行 Pipeline（核心操作）
+
+### 完整跑一个研究主题
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+python3 -m orchestrator.orchestrator run --topic "你的研究主题"
+```
+
+**示例**：
+```bash
+python3 -m orchestrator.orchestrator run --topic "动量与反转的边界条件"
+```
+
+### Dry-Run（不调用 Agent，验证流程连通性）
+```bash
+python3 -m orchestrator.orchestrator run --topic "测试" --dry-run
+```
+
+### 从中间 stage 恢复（跳过已完成的阶段）
+```bash
+# 假设 hypothesis 和 data_engineer 已完成，从 quant_analyst 开始
+python3 -m orchestrator.orchestrator run --topic "动量与反转的边界条件" --from-stage quant_analyst
+```
+
+### 跳过归档（保留 workspace 所有文件）
+```bash
+python3 -m orchestrator.orchestrator run --topic "xxx" --skip-archive
+```
+
+### 启用流式输出（实时看 Agent 输出）
+```bash
+python3 -m orchestrator.orchestrator run --topic "xxx" --stream
+```
+
+## Pipeline 产物
+
+Pipeline 完成后自动：
+1. **归档**：有价值的报告 + 图表保存到 `shared_workspace/archive/{run_id}/`
+2. **清理**：中间数据（parquet、csv、raw JSON）从 workspace 删除释放磁盘
+3. **HTML 报告**：自动生成 `shared_workspace/archive/{run_id}/final_report.html`
+
+每个 Agent 产出**中英双语**报告（`{name}.md` + `{name}_en.md`）。
+
+## 查看历史 Run
+
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+python3 -m orchestrator.orchestrator status
+```
+
+## 手动清理 Workspace
+
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+python3 -m orchestrator.orchestrator clear
+```
+
+> ⚠️ 这会删除 workspace 中所有文件（不包括 archive/），新 run 开始时会自动执行。
+
+## 故障排除
+
+### 容器无法启动
+```bash
+# 查看日志
+docker logs quant-data-router
+docker logs hermes-hypothesis
+
+# 重启单个容器
+docker restart hermes-hypothesis
+```
+
+### Agent 健康检查失败
+```bash
+# 检查端口是否被占用
+lsof -i :8642
+curl http://localhost:8642/health
+```
+
+### data_router 数据获取慢
+- data_router 有 SQLite cache（`./data_router/cache/data_cache.db`），已配置 Docker volume 持久化
+- 同一 symbol/barSize/duration 的重复请求直接命中 cache，第二次几乎瞬时返回
+- 如果 cache 被清空（容器重建），第一次请求需要走 IBKR，会比较慢
+
+### Pipeline 某个 stage 失败
+```bash
+# 从失败 stage 恢复（自动跳过已完成的）
+python3 -m orchestrator.orchestrator run --topic "相同主题" --from-stage {失败的stage名}
+```
+
+### HTML 报告生成失败
+- 检查 `shared_workspace/archive/{run_id}/` 是否存在
+- 检查 `jinja2` 和 `markdown` 是否已安装：`pip3 install jinja2 markdown`
+
+## 关键文件位置
+
+| 文件 | 路径 | 说明 |
+|------|------|------|
+| 编排器入口 | `orchestrator/orchestrator.py` | CLI 入口 |
+| 核心编排 | `orchestrator/core/orchestrator.py` | Pipeline 执行逻辑 |
+| Agent DAG | `orchestrator/core/dag.py` | Agent 注册、依赖、输出文件 |
+| HTML Reporter | `orchestrator/core/html_reporter.py` | 报告生成器 |
+| Data Router | `data_router/` | IB Gateway REST 网关 |
+| Agent 配置 | `agent_configs/{agent}/SOUL.md` | 每个 Agent 的指令 |
+| Agent 配置 | `agent_configs/{agent}/config.yaml` | Hermes 运行时配置 |
+| 产物目录 | `shared_workspace/` | 当前 run 的工作区 |
+| 归档目录 | `shared_workspace/archive/` | 历史 run 的归档 |
+| Docker 编排 | `docker-compose.yml` | 8 个服务定义 |
+
+## 全局约束
+
+1. **永远不要手动删除 `shared_workspace/archive/` 中的内容** — 这是唯一的历史产物备份
+2. **Data Router 是唯一连接 IB Gateway 的组件** — Agent 只能通过 `http://data-router:8888` 获取数据
+3. **双语报告**：每个 Agent 的 SOUL.md 已要求产出 `_zh.md` + `_en.md`，HTML 报告会自动渲染双语切换标签页
+4. **归档安全**：空 workspace 或归档失败时自动跳过清理，防止误删数据

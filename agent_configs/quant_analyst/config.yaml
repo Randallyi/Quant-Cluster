@@ -1,0 +1,51 @@
+# Hermes Agent Configuration
+# 生成时间：2026-05-15
+# 更新：增加 WebBridge 支持、Kimi Code Provider
+
+model:
+  default: claude-sonnet-4-6
+  provider: anthropic
+  base_url: https://api.kimi.com/coding/
+  context_length: 200000
+
+api_server:
+  enabled: true
+  host: 0.0.0.0
+
+tools:
+  enabled:
+    - terminal
+    - browser
+    - web_search
+    - file
+    - memory
+    - vision
+
+terminal:
+  backend: local
+  timeout: 900         # 回测可能需要更长时间
+  allowed_commands:
+    - python3
+    - pip
+    - ls
+    - cat
+    - mkdir
+    - curl
+
+memory:
+  enabled: true
+  type: sqlite
+
+skills:
+  auto_learn: true
+  hub:
+    enabled: false
+
+auxiliary:
+  vision:
+    provider: anthropic
+    model: claude-sonnet-4-6
+
+# ── 审批配置（无人值守模式）──────────────────────
+approvals:
+  mode: off

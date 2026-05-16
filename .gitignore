@@ -1,0 +1,61 @@
+# ============================================================
+# Quant Cluster — Git Ignore
+# ============================================================
+
+# Environment / Secrets
+.env
+*.env
+!*.env.example
+*.key
+*.pem
+auth.json
+
+# Runtime artifacts
+shared_workspace/
+!shared_workspace/.gitkeep
+data_router/cache/
+
+# Agent runtime (auto-generated when containers start)
+agent_configs/*/.cache/
+agent_configs/*/sessions/
+agent_configs/*/home/
+agent_configs/*/.local/
+agent_configs/*/skills/
+agent_configs/*/.env
+agent_configs/*/auth.json
+agent_configs/*/models_dev_cache.json
+agent_configs/*/.skills_prompt_snapshot.json
+agent_configs/*/.tirith-install-failed
+agent_configs/*/.lock
+agent_configs/*/auth.lock
+agent_configs/*/gateway.lock
+agent_configs/*/gateway.pid
+agent_configs/*/gateway_state.json
+agent_configs/*/channel_directory.json
+agent_configs/*/cron/
+agent_configs/*/logs/
+agent_configs/*/bin/
+agent_configs/*/memories/
+agent_configs/*/state.db*
+agent_configs/*/response_store.db*
+agent_configs/*/kanban.db*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
