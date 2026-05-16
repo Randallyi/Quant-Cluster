@@ -28,6 +28,7 @@ services:
     volumes:
       - ./agent_configs/hypothesis:/opt/data
       - ./shared_workspace:/workspace
+      - ./tools:/workspace/tools
     environment:
       - HERMES_AUTH_TOKEN=change-me-hypothesis
       - API_SERVER_ENABLED=true
@@ -57,6 +58,7 @@ services:
     volumes:
       - ./agent_configs/data_engineer:/opt/data
       - ./shared_workspace:/workspace
+      - ./tools:/workspace/tools
     environment:
       - HERMES_AUTH_TOKEN=change-me-data
       - API_SERVER_ENABLED=true
@@ -82,6 +84,7 @@ services:
     volumes:
       - ./agent_configs/quant_analyst:/opt/data
       - ./shared_workspace:/workspace
+      - ./tools:/workspace/tools
     environment:
       - HERMES_AUTH_TOKEN=change-me-quant
       - API_SERVER_ENABLED=true
@@ -107,6 +110,7 @@ services:
     volumes:
       - ./agent_configs/risk_auditor:/opt/data
       - ./shared_workspace:/workspace
+      - ./tools:/workspace/tools
     environment:
       - HERMES_AUTH_TOKEN=change-me-risk
       - API_SERVER_ENABLED=true
@@ -132,6 +136,7 @@ services:
     volumes:
       - ./agent_configs/strategy_writer:/opt/data
       - ./shared_workspace:/workspace
+      - ./tools:/workspace/tools
     environment:
       - HERMES_AUTH_TOKEN=change-me-writer
       - API_SERVER_ENABLED=true

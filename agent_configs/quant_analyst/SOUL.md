@@ -99,7 +99,7 @@ Quant Analyst 在以下场景可使用 WebBridge：
 # 示例：在 QuantConnect 搜索类似策略
 import subprocess, json
 result = subprocess.run(
-    ["python3", "/workspace/webbridge_client.py", "navigate",
+    ["python3", "/workspace/tools/webbridge_client.py", "navigate",
      "--url", "https://www.quantconnect.com/forum",
      "--session", "quant-qc"],
     capture_output=True, text=True

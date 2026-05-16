@@ -189,7 +189,7 @@ Data Engineer 原则上不需要大量网页搜索，但在以下场景可使用
 # 示例：验证 AAPL 2020-08-31 的拆股
 import subprocess, json
 result = subprocess.run(
-    ["python3", "/workspace/webbridge_client.py", "navigate",
+    ["python3", "/workspace/tools/webbridge_client.py", "navigate",
      "--url", "https://finance.yahoo.com/quote/AAPL/history",
      "--session", "data-verify"],
     capture_output=True, text=True

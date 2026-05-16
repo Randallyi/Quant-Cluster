@@ -32,7 +32,7 @@
 **正确策略**：
 1. **搜索阶段**：使用 `web_search` 工具获取候选链接和摘要
 2. **全文获取阶段**：**直接使用 `terminal` 工具调用 WebBridge 客户端**
-   - 命令：`python3 /workspace/webbridge_client.py fetch --url <URL> --session <SESSION_NAME>`
+   - 命令：`python3 /workspace/tools/webbridge_client.py fetch --url <URL> --session <SESSION_NAME>`
    - 这是获取所有网页全文的 **唯一有效方式**
    - 具体调用方法见下文「WebBridge 调用详解」
 
@@ -57,7 +57,7 @@
 
 ## WebBridge 调用详解
 
-WebBridge 通过宿主机的真实 Chrome 浏览器操作。你必须通过 **`terminal` 工具**调用 `/workspace/webbridge_client.py` 来使用它。
+WebBridge 通过宿主机的真实 Chrome 浏览器操作。你必须通过 **`terminal` 工具**调用 `/workspace/tools/webbridge_client.py` 来使用它。
 
 ### 标准流程（每次访问网站必须遵循）
 
@@ -68,7 +68,7 @@ import subprocess, json
 
 # 一步完成：导航到 URL 并获取页面内容
 result = subprocess.run(
-    ["python3", "/workspace/webbridge_client.py", "fetch",
+    ["python3", "/workspace/tools/webbridge_client.py", "fetch",
      "--url", "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4857230",
      "--session", "hypothesis-ssrn"],
     capture_output=True, text=True, timeout=30
@@ -88,7 +88,7 @@ else:
 
     # 如需点击翻页或展开更多内容
     result2 = subprocess.run(
-        ["python3", "/workspace/webbridge_client.py", "click",
+        ["python3", "/workspace/tools/webbridge_client.py", "click",
          "--selector", "button.load-more",
          "--session", "hypothesis-ssrn"],
         capture_output=True, text=True, timeout=30
@@ -97,7 +97,7 @@ else:
 
     # 重新获取 snapshot
     result3 = subprocess.run(
-        ["python3", "/workspace/webbridge_client.py", "snapshot",
+        ["python3", "/workspace/tools/webbridge_client.py", "snapshot",
          "--session", "hypothesis-ssrn"],
         capture_output=True, text=True, timeout=30
     )
@@ -105,7 +105,7 @@ else:
 
 # 提取完成后，关闭 session
 result = subprocess.run(
-    ["python3", "/workspace/webbridge_client.py", "close",
+    ["python3", "/workspace/tools/webbridge_client.py", "close",
      "--session", "hypothesis-ssrn"],
     capture_output=True, text=True, timeout=30
 )
@@ -119,22 +119,22 @@ else:
 
 ```bash
 # 一键获取页面内容（最常用）
-python3 /workspace/webbridge_client.py fetch --url "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4857230" --session hypothesis-ssrn
+python3 /workspace/tools/webbridge_client.py fetch --url "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4857230" --session hypothesis-ssrn
 
 # 在 Google 搜索（利用宿主机登录态）
-python3 /workspace/webbridge_client.py search --query "sector rotation macroeconomic indicators" --session hypothesis-search
+python3 /workspace/tools/webbridge_client.py search --query "sector rotation macroeconomic indicators" --session hypothesis-search
 
 # 在特定网站内搜索
-python3 /workspace/webbridge_client.py search --site "ssrn.com" --query "sector rotation leading indicators" --session hypothesis-ssrn
+python3 /workspace/tools/webbridge_client.py search --site "ssrn.com" --query "sector rotation leading indicators" --session hypothesis-ssrn
 
 # 获取页面 snapshot
-python3 /workspace/webbridge_client.py snapshot --session hypothesis-ssrn
+python3 /workspace/tools/webbridge_client.py snapshot --session hypothesis-ssrn
 
 # 执行 JS 提取特定元素
-python3 /workspace/webbridge_client.py evaluate --code "document.querySelector('.abstract').innerText" --session hypothesis-ssrn
+python3 /workspace/tools/webbridge_client.py evaluate --code "document.querySelector('.abstract').innerText" --session hypothesis-ssrn
 
 # 关闭 session
-python3 /workspace/webbridge_client.py close --session hypothesis-ssrn
+python3 /workspace/tools/webbridge_client.py close --session hypothesis-ssrn
 ```
 
 ### Session 命名规则
@@ -155,7 +155,7 @@ python3 /workspace/webbridge_client.py close --session hypothesis-ssrn
 ### 错误处理
 
 如果 WebBridge 调用返回错误（如 `Cannot connect to WebBridge`）：
-1. 先检查状态：`python3 /workspace/webbridge_client.py status`
+1. 先检查状态：`python3 /workspace/tools/webbridge_client.py status`
 2. 如果状态正常，重试一次
 3. 如果仍失败，记录该 URL 为"WebBridge 访问失败"，继续下一个信息源
 4. **不要无限重试同一个 URL**

@@ -53,7 +53,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 ### 健康检查（推荐启动后执行）
 ```bash
 cd /Users/yihaoyang/VScode\ workspace/quant-cluster
-python3 -m orchestrator.orchestrator health
+python3 -m orchestrator.cli health
 ```
 
 ### 停止
@@ -67,33 +67,33 @@ bash stop.sh
 ### 完整跑一个研究主题
 ```bash
 cd /Users/yihaoyang/VScode\ workspace/quant-cluster
-python3 -m orchestrator.orchestrator run --topic "你的研究主题"
+python3 -m orchestrator.cli run --topic "你的研究主题"
 ```
 
 **示例**：
 ```bash
-python3 -m orchestrator.orchestrator run --topic "动量与反转的边界条件"
+python3 -m orchestrator.cli run --topic "动量与反转的边界条件"
 ```
 
 ### Dry-Run（不调用 Agent，验证流程连通性）
 ```bash
-python3 -m orchestrator.orchestrator run --topic "测试" --dry-run
+python3 -m orchestrator.cli run --topic "测试" --dry-run
 ```
 
 ### 从中间 stage 恢复（跳过已完成的阶段）
 ```bash
 # 假设 hypothesis 和 data_engineer 已完成，从 quant_analyst 开始
-python3 -m orchestrator.orchestrator run --topic "动量与反转的边界条件" --from-stage quant_analyst
+python3 -m orchestrator.cli run --topic "动量与反转的边界条件" --from-stage quant_analyst
 ```
 
 ### 跳过归档（保留 workspace 所有文件）
 ```bash
-python3 -m orchestrator.orchestrator run --topic "xxx" --skip-archive
+python3 -m orchestrator.cli run --topic "xxx" --skip-archive
 ```
 
 ### 启用流式输出（实时看 Agent 输出）
 ```bash
-python3 -m orchestrator.orchestrator run --topic "xxx" --stream
+python3 -m orchestrator.cli run --topic "xxx" --stream
 ```
 
 ## Pipeline 产物
@@ -109,17 +109,39 @@ Pipeline 完成后自动：
 
 ```bash
 cd /Users/yihaoyang/VScode\ workspace/quant-cluster
-python3 -m orchestrator.orchestrator status
+python3 -m orchestrator.cli status
 ```
 
 ## 手动清理 Workspace
 
 ```bash
 cd /Users/yihaoyang/VScode\ workspace/quant-cluster
-python3 -m orchestrator.orchestrator clear
+python3 -m orchestrator.cli clear
 ```
 
 > ⚠️ 这会删除 workspace 中所有文件（不包括 archive/），新 run 开始时会自动执行。
+
+### 环境变量检查
+
+`.env` 文件中的变量不会自动加载到当前 shell。启动前确保执行：
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+export $(grep -v '^#' .env | xargs)
+```
+
+### WebBridge 客户端
+
+WebBridge 客户端脚本位于 `tools/webbridge_client.py`，通过 Docker volume 挂载到所有 Hermes 容器的 `/workspace/tools/webbridge_client.py`。
+
+Agent SOUL.md 中调用方式：
+```bash
+python3 /workspace/tools/webbridge_client.py fetch --url "<URL>" --session <SESSION>
+```
+
+**已知问题**：旧版脚本硬编码端口 `8765`，正确端口为 `10086`（由 `WEBBRIDGE_PORT` 环境变量控制）。如遇连接失败，先检查 WebBridge 端口：
+```bash
+lsof -i :10086   # 应显示 kimi-webbridge 进程
+```
 
 ## 故障排除
 
@@ -145,10 +167,21 @@ curl http://localhost:8642/health
 - 同一 symbol/barSize/duration 的重复请求直接命中 cache，第二次几乎瞬时返回
 - 如果 cache 被清空（容器重建），第一次请求需要走 IBKR，会比较慢
 
+### Pipeline 某个 stage 返回 502
+
+如果 orchestrator 调用 Agent 时返回 `openai.InternalServerError: Error code: 502`，可能原因：
+
+1. **Hermes Agent 内部的 LLM API key 丢失** — 常见于流式传输重连后。重启对应 Agent 容器：
+   ```bash
+   docker restart hermes-hypothesis
+   ```
+2. **Kimi Code API 连接不稳定** — `Stream drop` + `RemoteProtocolError`。通常是暂时的，重试即可。
+3. **请求处理超时** — 文献调研等任务可能需要 10 分钟以上。orchestrator 默认 timeout 为 600 秒，如需要可增加：修改 `orchestrator/clients/hermes.py` 中的 `timeout` 参数。
+
 ### Pipeline 某个 stage 失败
 ```bash
 # 从失败 stage 恢复（自动跳过已完成的）
-python3 -m orchestrator.orchestrator run --topic "相同主题" --from-stage {失败的stage名}
+python3 -m orchestrator.cli run --topic "相同主题" --from-stage {失败的stage名}
 ```
 
 ### HTML 报告生成失败
@@ -159,7 +192,8 @@ python3 -m orchestrator.orchestrator run --topic "相同主题" --from-stage {�
 
 | 文件 | 路径 | 说明 |
 |------|------|------|
-| 编排器入口 | `orchestrator/orchestrator.py` | CLI 入口 |
+| 编排器 CLI | `orchestrator/cli.py` | CLI 入口（`python3 -m orchestrator.cli`） |
+| WebBridge 客户端 | `tools/webbridge_client.py` | 挂载到容器 `/workspace/tools/` |
 | 核心编排 | `orchestrator/core/orchestrator.py` | Pipeline 执行逻辑 |
 | Agent DAG | `orchestrator/core/dag.py` | Agent 注册、依赖、输出文件 |
 | HTML Reporter | `orchestrator/core/html_reporter.py` | 报告生成器 |
