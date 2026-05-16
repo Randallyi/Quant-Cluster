@@ -204,6 +204,50 @@ python3 -m orchestrator.cli run --topic "相同主题" --from-stage {失败的st
 | 归档目录 | `shared_workspace/archive/` | 历史 run 的归档 |
 | Docker 编排 | `docker-compose.yml` | 8 个服务定义 |
 
+## 可复现性：为什么上次能跑通、这次不行？
+
+这是 Quant Cluster 最常见的工程化痛点。根本原因：**系统没有实现"纯净启动"**。
+
+### 状态泄漏全景图
+
+```
+对话 1（成功）          →  对话 2（失败）
+state.db 全新            →  state.db 有旧记忆 → agent 决策偏离
+kanban.db 全新           →  kanban.db 混乱 → no such table
+cache 全新               →  cache 命中 stale 数据 → 回测不一致
+workspace 空             →  workspace 有旧 .parquet → 误判上游已完成
+```
+
+### 正确的启动流程（每次 run 前必做）
+
+```bash
+cd /Users/yihaoyang/VScode\ workspace/quant-cluster
+
+# 方法 A：一键纯净启动（推荐）
+bash launch.sh --clean
+
+# 方法 B：手动分步
+bash reset.sh      # 清除所有跨 run 状态
+bash launch.sh     # 启动容器
+bash scripts/smoke_test.sh   # 验证纯净状态
+```
+
+### `launch.sh --clean` 做了什么？
+
+1. 停止所有容器
+2. 删除所有 Agent 的 `state.db` / `kanban.db` / `auth.lock`
+3. 删除 Data Router 缓存
+4. 清空 Workspace（保留 archive/）
+5. 删除 Redis Volume
+6. 删除 Orchestrator 本地 DB
+7. 重新创建容器（`--force-recreate`）
+
+### 永远不要做的事情
+
+- ❌ 直接 `bash launch.sh`（不清除状态，等于"唤醒脏系统"）
+- ❌ `git add .` 把 `orchestrator.db` 或 `agent_configs/*/*.db` 提交到仓库
+- ❌ 手动删除 `shared_workspace/archive/`（唯一历史备份）
+
 ## 全局约束
 
 1. **永远不要手动删除 `shared_workspace/archive/` 中的内容** — 这是唯一的历史产物备份

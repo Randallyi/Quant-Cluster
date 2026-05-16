@@ -2,8 +2,18 @@
 # Quant Cluster Launcher for macOS
 set -e
 
-echo "🐳 启动 Hermes 量化集群..."
 cd "$(dirname "$0")"
+
+# ── 纯净启动模式 ────────────────────────────────────
+CLEAN_MODE=false
+if [ "$1" = "--clean" ] || [ "$1" = "-c" ]; then
+    CLEAN_MODE=true
+    echo "🧹 纯净启动模式：先重置状态，再启动集群..."
+    bash "$(dirname "$0")/reset.sh"
+    echo ""
+fi
+
+echo "🐳 启动 Hermes 量化集群..."
 
 # 1. 检查 Docker
 if ! docker info > /dev/null 2>&1; then
@@ -26,7 +36,7 @@ export $(grep -v '^#' .env | xargs)
 
 # 4. 启动 Docker Compose（包含 data_router + 5 个 Hermes + Redis）
 echo "📦 启动 Docker Compose..."
-docker compose up -d
+docker compose up -d --force-recreate
 
 # 5. 等待 data_router 就绪
 echo "⏳ 等待 Data Router 连接 IB Gateway..."

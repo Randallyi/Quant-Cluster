@@ -141,42 +141,26 @@ def _archive_and_cleanup_run(run_id: str, topic: str) -> Dict:
                 total_archived_bytes += item.stat().st_size
 
     # ── Phase 2: Safety checks ─────────────────────────────────────
-    # Check 1: Did we actually archive anything?
-    if not archived_files:
-        console.log("[yellow]⚠️  Archive is empty — skipping workspace cleanup[/yellow]")
-        manifest = {
-            "run_id": run_id,
-            "topic": topic,
-            "archived_at": datetime.now().isoformat(),
-            "archived_files_count": 0,
-            "archived_size_mb": 0.0,
-            "cleaned_items_count": 0,
-            "warning": "archive_empty_skipped_cleanup",
-        }
-        (archive_dir / "archive_manifest.json").write_text(
-            json.dumps(manifest, indent=2, ensure_ascii=False)
-        )
-        return manifest
+    # Check: Verify archive files exist on disk (only if we expected to archive)
+    if archived_files:
+        archive_file_count = sum(1 for _ in archive_dir.rglob("*") if _.is_file() and _.name != "archive_manifest.json")
+        if archive_file_count == 0:
+            console.log("[yellow]⚠️  Archive verification failed — skipping workspace cleanup[/yellow]")
+            manifest = {
+                "run_id": run_id,
+                "topic": topic,
+                "archived_at": datetime.now().isoformat(),
+                "archived_files_count": 0,
+                "archived_size_mb": 0.0,
+                "cleaned_items_count": 0,
+                "warning": "archive_verification_failed_skipped_cleanup",
+            }
+            (archive_dir / "archive_manifest.json").write_text(
+                json.dumps(manifest, indent=2, ensure_ascii=False)
+            )
+            return manifest
 
-    # Check 2: Verify archive files exist on disk
-    archive_file_count = sum(1 for _ in archive_dir.rglob("*") if _.is_file() and _.name != "archive_manifest.json")
-    if archive_file_count == 0:
-        console.log("[yellow]⚠️  Archive verification failed — skipping workspace cleanup[/yellow]")
-        manifest = {
-            "run_id": run_id,
-            "topic": topic,
-            "archived_at": datetime.now().isoformat(),
-            "archived_files_count": 0,
-            "archived_size_mb": 0.0,
-            "cleaned_items_count": 0,
-            "warning": "archive_verification_failed_skipped_cleanup",
-        }
-        (archive_dir / "archive_manifest.json").write_text(
-            json.dumps(manifest, indent=2, ensure_ascii=False)
-        )
-        return manifest
-
-    # ── Phase 3: Cleanup (only after passing safety checks) ────────
+    # ── Phase 3: Cleanup (always execute — intermediate files must not leak) ────────
     cleaned_files = []
     for agent_name, info in AGENTS.items():
         ws = WORKSPACE_ROOT / info["workspace"]
