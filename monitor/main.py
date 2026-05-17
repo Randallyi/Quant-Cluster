@@ -27,6 +27,7 @@ _broadcast_task: asyncio.Task | None = None
 
 last_pipeline: dict = {}
 last_agents: dict = {}
+last_log_indices: dict[str, int] = {}
 
 
 class ConnectionManager:
@@ -86,6 +87,14 @@ async def _broadcast_loop() -> None:
                     await manager.broadcast(
                         {"type": "agent_task", "agent": agent_name, **agent_data}
                     )
+
+            all_logs = state.get_all_logs(limit=50)
+            for agent, logs in all_logs.items():
+                prev_count = last_log_indices.get(agent, 0)
+                if len(logs) > prev_count:
+                    for ev in logs[prev_count:]:
+                        await manager.broadcast({"type": "agent_activity", **ev, "timestamp": _now()})
+                    last_log_indices[agent] = len(logs)
 
             if heartbeat_counter >= 5:
                 heartbeat_counter = 0
@@ -177,6 +186,7 @@ async def websocket_endpoint(ws: WebSocket):
                 "pipeline": state.get_pipeline(),
                 "agents": state.get_all_agents(),
                 "runs": state.get_runs(),
+                "logs": state.get_all_logs(limit=20),
             }
         )
         while True:

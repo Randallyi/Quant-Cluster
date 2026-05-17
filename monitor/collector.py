@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import sqlite3
@@ -14,6 +15,8 @@ from watchdog.observers import Observer
 
 from monitor.parser import parse_log_line
 from monitor.state import StateCache
+
+logger = logging.getLogger("monitor.collector")
 
 
 class DockerClient:
@@ -272,7 +275,7 @@ class Collector:
                     )
             except Exception:
                 # Keep the loop alive; errors are transient (socket/db unavailable)
-                pass
+                logger.exception("Poll loop error")
 
             await asyncio.sleep(2)
 
