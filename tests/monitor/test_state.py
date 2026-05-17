@@ -26,6 +26,13 @@ class TestPipeline:
         copy["a"] = 999
         assert cache.get_pipeline() == {"a": 1}
 
+    def test_update_pipeline_ignores_subsequent_input_mutation(self) -> None:
+        cache = StateCache()
+        data = {"a": 1}
+        cache.update_pipeline(data)
+        data["a"] = 999
+        assert cache.get_pipeline() == {"a": 1}
+
 
 class TestAgents:
     def test_update_and_get(self) -> None:
@@ -61,6 +68,13 @@ class TestAgents:
         cache.update_agent("a", {"v": 1})
         all_agents = cache.get_all_agents()
         all_agents["a"]["v"] = 999
+        assert cache.get_agent("a") == {"v": 1}
+
+    def test_update_agent_ignores_subsequent_input_mutation(self) -> None:
+        cache = StateCache()
+        data = {"v": 1}
+        cache.update_agent("a", data)
+        data["v"] = 999
         assert cache.get_agent("a") == {"v": 1}
 
 

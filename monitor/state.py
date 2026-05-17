@@ -19,7 +19,7 @@ class StateCache:
     def update_pipeline(self, data: dict) -> None:
         """Merge *data* into the shared pipeline state."""
         with self._lock:
-            self._pipeline.update(data)
+            self._pipeline.update(dict(data))
 
     def get_pipeline(self) -> dict:
         """Return a shallow copy of the pipeline state."""
@@ -33,7 +33,7 @@ class StateCache:
         with self._lock:
             if agent not in self._agents:
                 self._agents[agent] = {}
-            self._agents[agent].update(data)
+            self._agents[agent].update(dict(data))
 
     def get_agent(self, agent: str) -> dict:
         """Return a shallow copy of the state for *agent*, or {}."""
