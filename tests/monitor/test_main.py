@@ -61,3 +61,29 @@ class TestEndpoints:
         logs = response.json()
         assert len(logs) == 1
         assert logs[0]["msg"] == "hello"
+
+
+class TestWebSocket:
+    def test_websocket_init_message(self, client):
+        with client.websocket_connect("/ws") as ws:
+            data = ws.receive_json()
+            assert data["type"] == "init"
+            assert "pipeline" in data
+            assert "agents" in data
+            assert "runs" in data
+
+    def test_websocket_ping_pong(self, client):
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_json()  # init
+            ws.send_json({"type": "ping"})
+            data = ws.receive_json()
+            assert data == {"type": "pong"}
+
+    def test_websocket_disconnect_cleanup(self, client):
+        from monitor.main import manager
+
+        initial_count = len(manager._connections)
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_json()  # init
+            assert len(manager._connections) == initial_count + 1
+        assert len(manager._connections) == initial_count

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+
+logger = logging.getLogger("monitor")
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -40,11 +43,16 @@ class ConnectionManager:
         self._connections.discard(ws)
 
     async def broadcast(self, message: dict) -> None:
+        if not self._connections:
+            return
+        connections = list(self._connections)
+        results = await asyncio.gather(
+            *[ws.send_json(message) for ws in connections],
+            return_exceptions=True,
+        )
         dead: set[WebSocket] = set()
-        for ws in self._connections:
-            try:
-                await ws.send_json(message)
-            except Exception:
+        for ws, result in zip(connections, results):
+            if isinstance(result, Exception):
                 dead.add(ws)
         for ws in dead:
             self._connections.discard(ws)
@@ -85,7 +93,7 @@ async def _broadcast_loop() -> None:
         except asyncio.CancelledError:
             raise
         except Exception:
-            pass
+            logger.exception("Error in broadcast loop")
 
 
 @asynccontextmanager
@@ -176,8 +184,10 @@ async def websocket_endpoint(ws: WebSocket):
             if data.get("type") == "ping":
                 await ws.send_json({"type": "pong"})
     except WebSocketDisconnect:
-        manager.disconnect(ws)
+        pass
     except Exception:
+        logger.exception("WebSocket handler error")
+    finally:
         manager.disconnect(ws)
 
 
