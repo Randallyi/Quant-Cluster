@@ -1,11 +1,13 @@
 """Unit tests for monitor.collector."""
 
+import asyncio
 import sqlite3
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from monitor.collector import AgentLogTailer, DBPoller, DockerClient
+from monitor.collector import AgentLogTailer, Collector, DBPoller, DockerClient
+from monitor.state import StateCache
 
 
 class TestAgentLogTailer:
@@ -220,3 +222,90 @@ class TestDBPoller:
         latest = poller.get_latest_active_run()
         assert latest is not None
         assert latest["run_id"] == "run_1"
+
+
+class TestCollector:
+    @pytest.fixture
+    def agent_configs_dir(self, tmp_path):
+        for agent in Collector.AGENT_LOG_NAMES:
+            log_dir = tmp_path / agent / "logs"
+            log_dir.mkdir(parents=True)
+            (log_dir / "agent.log").write_text("")
+        return tmp_path
+
+    @pytest.mark.asyncio
+    async def test_start_stop_lifecycle(self, agent_configs_dir):
+        state = StateCache()
+        collector = Collector(
+            state, str(agent_configs_dir / "db.db"), str(agent_configs_dir)
+        )
+
+        with patch("monitor.collector.AgentLogTailer") as MockTailer, patch.object(
+            Collector, "_poll_loop", new=lambda self: asyncio.sleep(10)
+        ):
+            mock_tailer = Mock()
+            MockTailer.return_value = mock_tailer
+
+            collector.start()
+            assert collector._running is True
+            assert collector._poll_task is not None
+            assert len(collector.tailers) == len(Collector.AGENT_LOG_NAMES)
+
+            await collector.stop()
+            assert collector._poll_task is None
+            assert collector.tailers == []
+            assert collector._running is False
+            assert mock_tailer.stop_watching.call_count == len(
+                Collector.AGENT_LOG_NAMES
+            )
+
+    @pytest.mark.asyncio
+    async def test_double_start_is_idempotent(self, agent_configs_dir):
+        state = StateCache()
+        collector = Collector(
+            state, str(agent_configs_dir / "db.db"), str(agent_configs_dir)
+        )
+
+        with patch("monitor.collector.AgentLogTailer") as MockTailer, patch.object(
+            Collector, "_poll_loop", new=lambda self: asyncio.sleep(10)
+        ):
+            mock_tailer = Mock()
+            MockTailer.return_value = mock_tailer
+
+            collector.start()
+            first_task = collector._poll_task
+            first_tailers = list(collector.tailers)
+
+            collector.start()
+            assert collector._poll_task is first_task
+            assert collector.tailers == first_tailers
+            assert collector._running is True
+
+            await collector.stop()
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_task_and_stops_tailers(self, agent_configs_dir):
+        state = StateCache()
+        collector = Collector(
+            state, str(agent_configs_dir / "db.db"), str(agent_configs_dir)
+        )
+
+        with patch("monitor.collector.AgentLogTailer") as MockTailer, patch.object(
+            Collector, "_poll_loop", new=lambda self: asyncio.sleep(10)
+        ):
+            mock_tailer = Mock()
+            MockTailer.return_value = mock_tailer
+
+            collector.start()
+            task = collector._poll_task
+            assert task is not None
+            assert not task.done()
+
+            await collector.stop()
+            assert task.cancelled()
+            assert collector._poll_task is None
+            assert collector.tailers == []
+            assert collector._running is False
+            assert mock_tailer.stop_watching.call_count == len(
+                Collector.AGENT_LOG_NAMES
+            )

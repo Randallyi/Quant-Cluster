@@ -225,9 +225,14 @@ class Collector:
         self.agent_configs_path = agent_configs_path
         self.tailers: list[AgentLogTailer] = []
         self._poll_task: asyncio.Task | None = None
+        self._running = False
 
     def start(self) -> None:
         """Start log tailers for each agent and background polling loop."""
+        if self._running:
+            return
+        self._running = True
+
         for agent, log_name in self.AGENT_LOG_NAMES.items():
             log_path = os.path.join(
                 self.agent_configs_path, agent, "logs", "agent.log"
@@ -247,9 +252,9 @@ class Collector:
         while True:
             try:
                 # 1. Poll DB
-                runs = self.db.get_runs()
+                runs = await asyncio.to_thread(self.db.get_runs)
                 self.state.set_runs(runs)
-                latest = self.db.get_latest_active_run()
+                latest = await asyncio.to_thread(self.db.get_latest_active_run)
                 if latest:
                     self.state.update_pipeline(latest)
 
@@ -273,6 +278,10 @@ class Collector:
 
     async def stop(self) -> None:
         """Cancel polling task, stop all tailers, close Docker client."""
+        if not self._running:
+            return
+        self._running = False
+
         if self._poll_task is not None:
             self._poll_task.cancel()
             try:
