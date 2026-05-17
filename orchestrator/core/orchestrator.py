@@ -246,6 +246,11 @@ class InteractiveOrchestrator:
             if not healthy:
                 all_ok = False
         console.print(table)
+        # Close all client sessions to avoid "Unclosed client session" warnings
+        await asyncio.gather(
+            *[self.clients[name].close() for name in AGENTS],
+            return_exceptions=True,
+        )
         return all_ok
 
     async def run_pipeline(
@@ -353,7 +358,7 @@ class InteractiveOrchestrator:
         if stream:
             result_text = await self._call_agent_stream(agent_name, system_prompt, user_prompt)
         else:
-            result_text = await self.clients[agent_name].chat(system_prompt, user_prompt, timeout=600)
+            result_text = await self.clients[agent_name].chat(system_prompt, user_prompt, timeout=1800)
 
         # 3. check errors
         if result_text.startswith("[ERROR]"):
@@ -379,7 +384,7 @@ class InteractiveOrchestrator:
             if resolution["action"] == "resume":
                 console.log(f"[dim]Resuming {agent_name} with instructions...[/dim]")
                 resume_prompt = f"{user_prompt}\n\n[ORCHESTRATOR_DECISION]\n{resolution['instruction']}"
-                result_text = await self.clients[agent_name].chat(system_prompt, resume_prompt, timeout=600)
+                result_text = await self.clients[agent_name].chat(system_prompt, resume_prompt, timeout=1800)
                 if result_text.startswith("[ERROR]"):
                     self.db.update_task_status(task_id, "failed", error_log=result_text)
                     return {"status": "failed", "agent": agent_name, "reason": "agent_error"}

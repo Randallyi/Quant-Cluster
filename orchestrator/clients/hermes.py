@@ -1,9 +1,8 @@
 """Async Hermes Agent client — wraps OpenAI-compatible chat API."""
-import asyncio
+import json
 from typing import AsyncIterator, Optional
 
-import httpx
-from openai import AsyncOpenAI
+import aiohttp
 
 
 class AsyncHermesClient:
@@ -12,11 +11,15 @@ class AsyncHermesClient:
     def __init__(self, port: int, api_key: str, model: str = "hermes-agent"):
         self.port = port
         self.model = model
-        self._client = AsyncOpenAI(
-            base_url=f"http://localhost:{port}/v1",
-            api_key=api_key,
-        )
-        self._http = httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=10.0))
+        self.api_key = api_key
+        self._http_session: Optional[aiohttp.ClientSession] = None
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        if self._http_session is None or self._http_session.closed:
+            self._http_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=1800, connect=10)
+            )
+        return self._http_session
 
     # ------------------------------------------------------------------
     # Core chat
@@ -28,49 +31,80 @@ class AsyncHermesClient:
         timeout: float = 600.0,
     ) -> str:
         """Blocking chat call. Returns full text response."""
-        response = await self._client.chat.completions.create(
-            model=self.model,
-            messages=[
+        session = self._get_session()
+        url = f"http://localhost:{self.port}/v1/chat/completions"
+        payload = {
+            "model": self.model,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            timeout=timeout,
-        )
-        return response.choices[0].message.content or ""
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        async with session.post(url, json=payload, headers=headers) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+            return data["choices"][0]["message"]["content"] or ""
 
     async def chat_stream(
         self,
         system_prompt: str,
         user_prompt: str,
-        timeout: float = 600.0,
+        timeout: float = 1800.0,
     ) -> AsyncIterator[str]:
         """Streaming chat call. Yields text chunks as they arrive."""
-        stream = await self._client.chat.completions.create(
-            model=self.model,
-            messages=[
+        session = self._get_session()
+        url = f"http://localhost:{self.port}/v1/chat/completions"
+        payload = {
+            "model": self.model,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            stream=True,
-            timeout=timeout,
-        )
-        async for chunk in stream:
-            if not chunk.choices:
-                continue
-            choice = chunk.choices[0]
-            if not choice.delta or not choice.delta.content:
-                continue
-            yield choice.delta.content
+            "stream": True,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        }
+        async with session.post(url, json=payload, headers=headers) as resp:
+            resp.raise_for_status()
+            async for line in resp.content:
+                line = line.decode("utf-8").strip()
+                if line.startswith("data: "):
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+                    if not chunk.get("choices"):
+                        continue
+                    choice = chunk["choices"][0]
+                    delta = choice.get("delta", {})
+                    content = delta.get("content")
+                    if content:
+                        yield content
 
     # ------------------------------------------------------------------
     # Health & utilities
     # ------------------------------------------------------------------
     async def health_check(self) -> bool:
+        session = self._get_session()
         try:
-            r = await self._http.get(f"http://localhost:{self.port}/health", timeout=5.0)
-            return r.status_code == 200
+            async with session.get(
+                f"http://localhost:{self.port}/health",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                return resp.status == 200
         except Exception:
             return False
 
     async def close(self):
-        await self._http.aclose()
+        if self._http_session and not self._http_session.closed:
+            await self._http_session.close()
