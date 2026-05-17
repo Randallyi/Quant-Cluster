@@ -171,12 +171,12 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./orchestrator/orchestrator.db:/data/orchestrator.db:ro
+      - ./orchestrator:/data/orchestrator:ro
       - ./agent_configs:/data/agent_configs:ro
       - ./shared_workspace:/workspace:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - DB_PATH=/data/orchestrator.db
+      - DB_PATH=/data/orchestrator/orchestrator.db
       - AGENT_CONFIGS_PATH=/data/agent_configs
       - WORKSPACE_PATH=/workspace
     restart: unless-stopped
