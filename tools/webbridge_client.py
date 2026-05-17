@@ -62,10 +62,18 @@ def cmd_find_tab(args):
     print(json.dumps(r, indent=2))
 
 
+def _check_navigate_success(r):
+    """Check if navigate response indicates success.
+    
+    WebBridge API returns: {"ok": true, "data": {"success": true, ...}}
+    """
+    return r.get("ok") is True and r.get("data", {}).get("success") is True
+
+
 def cmd_fetch(args):
     """Navigate (new tab) + snapshot in one call."""
     r1 = api_request("navigate", {"url": args.url, "newTab": True}, args.session)
-    if not r1.get("success"):
+    if not _check_navigate_success(r1):
         print(json.dumps({"navigate_error": r1}, indent=2))
         return
     r2 = api_request("snapshot", {}, args.session)
@@ -113,10 +121,37 @@ def cmd_search(args):
     query = args.query + site
     url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
     r1 = api_request("navigate", {"url": url, "newTab": True}, args.session)
-    if not r1.get("success"):
+    if not _check_navigate_success(r1):
         print(json.dumps({"navigate_error": r1}, indent=2))
         return
     r2 = api_request("snapshot", {}, args.session)
+    print(json.dumps(r2, indent=2))
+
+
+def cmd_download(args):
+    """Download a file via WebBridge (uses host Chrome's session/cookies).
+    
+    Returns base64-encoded content that the agent can decode and save.
+    Useful for PDFs and other files that require browser cookies/session.
+    """
+    # First navigate to establish session context
+    r1 = api_request("navigate", {"url": args.url, "newTab": True}, args.session)
+    if not _check_navigate_success(r1):
+        print(json.dumps({"navigate_error": r1}, indent=2))
+        return
+    
+    # Use evaluate to fetch the file via browser's fetch API
+    fetch_code = f'''
+fetch("{args.url}")
+    .then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.statusText))
+    .then(buf => {{
+        const bytes = new Uint8Array(buf);
+        const base64 = btoa(Array.from(bytes, b => String.fromCharCode(b)).join(''));
+        return {{success: true, base64: base64, size: bytes.length}};
+    }})
+    .catch(e => ({{success: false, error: e.toString()}}));
+'''
+    r2 = api_request("evaluate", {"code": fetch_code}, args.session)
     print(json.dumps(r2, indent=2))
 
 
@@ -168,6 +203,10 @@ def main():
     p = sub.add_parser("search", help="Search Google via WebBridge")
     p.add_argument("--query", required=True)
     p.add_argument("--site", default="")
+    p.add_argument("--session", required=True)
+
+    p = sub.add_parser("download", help="Download a file via WebBridge (returns base64)")
+    p.add_argument("--url", required=True)
     p.add_argument("--session", required=True)
 
     args = parser.parse_args()

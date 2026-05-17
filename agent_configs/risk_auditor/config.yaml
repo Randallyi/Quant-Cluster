@@ -15,7 +15,7 @@ api_server:
 tools:
   enabled:
     - terminal
-    - browser
+    # - browser         # ← 禁用：容器内无浏览器引擎，使用 WebBridge 替代
     - web_search
     - file
     - memory
@@ -23,9 +23,10 @@ tools:
 
 terminal:
   backend: local
-  timeout: 900
+  timeout: 1800
   allowed_commands:
     - python3
+    - uv                # 用于安装 Python 包
     - pip
     - ls
     - cat
