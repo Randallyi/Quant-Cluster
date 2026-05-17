@@ -1,0 +1,15 @@
+#!/bin/sh
+# Quant Cluster pre-commit hook
+# Auto-installs via scripts/validate.py ensure_hooks_installed()
+
+echo "[pre-commit] Running quant-cluster validate.py..."
+python3 scripts/validate.py
+RESULT=$?
+if [ $RESULT -ne 0 ]; then
+    echo ""
+    echo "[pre-commit] Validation failed. Commit blocked."
+    echo "[pre-commit] Run 'python3 scripts/validate.py --fix' to auto-fix simple issues."
+    exit 1
+fi
+echo "[pre-commit] Validation passed."
+exit 0
