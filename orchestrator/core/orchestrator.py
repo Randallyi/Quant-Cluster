@@ -16,6 +16,15 @@ from orchestrator.core.state_db import StateDB
 from orchestrator.clients.hermes import AsyncHermesClient
 from orchestrator.clients.data_router import DataRouterClient
 
+# Per-agent timeouts (seconds)
+AGENT_TIMEOUTS = {
+    "hypothesis": 3600,      # 1h — literature review needs time
+    "data_engineer": 1800,   # 30m
+    "quant_analyst": 1800,   # 30m
+    "risk_auditor": 1800,    # 30m
+    "strategy_writer": 1800, # 30m
+}
+
 console = Console()
 
 ARCHIVE_ROOT = WORKSPACE_ROOT / "archive"
@@ -355,18 +364,31 @@ class InteractiveOrchestrator:
         console.log(f"[dim]Calling {agent_name} @ localhost:{AGENTS[agent_name]['port']} ...[/dim]")
 
         # 2. call agent
+        agent_timeout = AGENT_TIMEOUTS.get(agent_name, 1800)
         if stream:
             result_text = await self._call_agent_stream(agent_name, system_prompt, user_prompt)
         else:
-            result_text = await self.clients[agent_name].chat(system_prompt, user_prompt, timeout=1800)
+            result_text = await self.clients[agent_name].chat(system_prompt, user_prompt, timeout=agent_timeout)
 
-        # 3. check errors
+        # 3. empty result retry (possible SSE disconnect)
+        if not result_text or result_text.strip() == "":
+            console.log(f"[yellow]{agent_name} returned empty — retrying once[/yellow]")
+            resume_prompt = (
+                f"{user_prompt}\n\n"
+                "[SYSTEM_NOTICE] 上次响应似乎被中断了。"
+                "请从上次中断的地方继续，不要重复已完成的工作。"
+            )
+            result_text = await self.clients[agent_name].chat(
+                system_prompt, resume_prompt, timeout=agent_timeout
+            )
+
+        # 4. check errors
         if result_text.startswith("[ERROR]"):
             console.log(f"[red]{agent_name} failed[/red]")
             self.db.update_task_status(task_id, "failed", error_log=result_text)
             return {"status": "failed", "agent": agent_name, "reason": "agent_error"}
 
-        # 4. consultation handling
+        # 5. consultation handling
         if "[CONSULTATION_NEEDED]" in result_text:
             self.db.update_task_status(task_id, "consultation_needed", output_summary=result_text[:500])
             consultation = _parse_consultation(result_text)
@@ -384,7 +406,9 @@ class InteractiveOrchestrator:
             if resolution["action"] == "resume":
                 console.log(f"[dim]Resuming {agent_name} with instructions...[/dim]")
                 resume_prompt = f"{user_prompt}\n\n[ORCHESTRATOR_DECISION]\n{resolution['instruction']}"
-                result_text = await self.clients[agent_name].chat(system_prompt, resume_prompt, timeout=1800)
+                result_text = await self.clients[agent_name].chat(
+                    system_prompt, resume_prompt, timeout=agent_timeout
+                )
                 if result_text.startswith("[ERROR]"):
                     self.db.update_task_status(task_id, "failed", error_log=result_text)
                     return {"status": "failed", "agent": agent_name, "reason": "agent_error"}
