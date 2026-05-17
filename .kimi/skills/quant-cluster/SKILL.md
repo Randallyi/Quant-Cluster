@@ -75,21 +75,40 @@ python3 -m orchestrator.cli run --topic "你的研究主题"
 python3 -m orchestrator.cli run --topic "动量与反转的边界条件"
 ```
 
+**预估运行时间**（基于实际运行经验，每个 Agent 120 分钟超时）：
+
+| Stage | 典型耗时 | 说明 |
+|-------|---------|------|
+| hypothesis | 10-20 min | 文献调研 + 假设生成 |
+| data_engineer | 25-35 min | 数据获取 + 特征工程（可能初期卡代码） |
+| quant_analyst | 20-30 min | 回测建模 + 多策略对比（可能因 LLM 流超时） |
+| risk_auditor | 10-15 min | 过拟合检验 + GO/NO-GO 裁决 |
+| strategy_writer | 5-10 min | 策略撰写或失败分析 |
+| **总计** | **~70-110 min** | 建议预留 **2 小时** 完整运行 |
+
+> ⚠️ **quant_analyst 最容易超时**：流式 LLM 响应可能因网络不稳定中断。如果发生，产出文件已写入磁盘，使用 `--from-stage` 中继恢复即可。
+
 ### Dry-Run（不调用 Agent，验证流程连通性）
 ```bash
 python3 -m orchestrator.cli run --topic "测试" --dry-run
 ```
+> 💡 **最佳实践**：首次运行新主题前，先 dry-run 验证所有容器健康。
 
 ### 从中间 stage 恢复（跳过已完成的阶段）
 ```bash
 # 假设 hypothesis 和 data_engineer 已完成，从 quant_analyst 开始
 python3 -m orchestrator.cli run --topic "动量与反转的边界条件" --from-stage quant_analyst
 ```
+> ✅ 实际验证有效：quant_analyst 超时后，用 `--from-stage risk_auditor` 成功完成后续阶段。
 
 ### 跳过归档（保留 workspace 所有文件）
 ```bash
 python3 -m orchestrator.cli run --topic "xxx" --skip-archive
 ```
+> ⚠️ **副作用**：`--skip-archive` 会**同时跳过 HTML 报告生成**。如需 HTML，pipeline 完成后手动执行：
+> ```bash
+> python3 -c "from orchestrator.core.orchestrator import _archive_and_cleanup_run; from orchestrator.core.html_reporter import generate_html_report; from orchestrator.core.dag import WORKSPACE_ROOT; from pathlib import Path; run_id='run_xxx'; _archive_and_cleanup_run(run_id, 'topic'); generate_html_report(run_id, 'topic', WORKSPACE_ROOT, WORKSPACE_ROOT/'archive')"
+> ```
 
 ### 启用流式输出（实时看 Agent 输出）
 ```bash
@@ -176,7 +195,30 @@ curl http://localhost:8642/health
    docker restart hermes-hypothesis
    ```
 2. **Kimi Code API 连接不稳定** — `Stream drop` + `RemoteProtocolError`。通常是暂时的，重试即可。
-3. **请求处理超时** — 文献调研等任务可能需要 10 分钟以上。orchestrator 默认 timeout 为 600 秒，如需要可增加：修改 `orchestrator/clients/hermes.py` 中的 `timeout` 参数。
+3. **请求处理超时** — 每个 Agent 超时为 **120 分钟**（已修改 `orchestrator/core/orchestrator.py` 中 `AGENT_TIMEOUTS`）。如果仍不够，可继续增加。
+
+### Pipeline 某个 stage 超时（最常见：quant_analyst）
+
+**症状**：orchestrator 日志停留在 `Calling quant_analyst @ localhost:8644 ...` 很久，最终后台任务 60-120 分钟超时。
+
+**原因**：quant_analyst 的 LLM 流式传输可能因网络不稳定中断，但 Agent 内部已写完文件。
+
+**解决**：
+1. 检查 `shared_workspace/03_backtest/` 是否已有产出文件
+2. 如果有文件，使用 `--from-stage risk_auditor` 中继恢复
+3. 如果没有文件，检查 quant_analyst 容器日志：`docker logs hermes-quant`
+
+### 后台任务总超时 vs Agent 超时
+
+两个不同的超时层级：
+
+| 超时类型 | 位置 | 默认值 | 控制方式 |
+|----------|------|--------|----------|
+| **后台任务总超时** | Shell 启动参数 | 60 min | 启动时 `timeout` 参数 |
+| **单个 Agent 超时** | `AGENT_TIMEOUTS` | 120 min | 修改 `orchestrator/core/orchestrator.py` |
+| **HTTP 连接超时** | `hermes.py` | 1800s | 修改 `orchestrator/clients/hermes.py` |
+
+如果 Agent 产出已写入磁盘但 HTTP 响应未返回，增加 `AGENT_TIMEOUTS` 即可。
 
 ### Pipeline 某个 stage 失败
 ```bash
@@ -247,6 +289,57 @@ bash scripts/smoke_test.sh   # 验证纯净状态
 - ❌ 直接 `bash launch.sh`（不清除状态，等于"唤醒脏系统"）
 - ❌ `git add .` 把 `orchestrator.db` 或 `agent_configs/*/*.db` 提交到仓库
 - ❌ 手动删除 `shared_workspace/archive/`（唯一历史备份）
+
+## 最优运行实例（Best Practices）
+
+基于多次实际运行验证的**推荐流程**：
+
+### 1. 启动前：一键纯净启动
+```bash
+bash launch.sh --clean   # 清除所有跨 run 状态，避免状态泄漏
+bash scripts/smoke_test.sh   # 验证连通性
+```
+
+### 2. 首次运行新主题：先 dry-run
+```bash
+python3 -m orchestrator.cli run --topic "你的主题" --dry-run
+```
+
+### 3. 正式运行：后台任务 + 充足超时
+```bash
+# 在后台运行，总超时设为 3-4 小时
+python3 -m orchestrator.cli run --topic "你的主题" --skip-archive
+```
+> `--skip-archive` 保留 workspace 文件便于调试。如需 HTML，结束后手动生成。
+
+### 4. 监控：定期检查文件产出
+```bash
+# 每 10 分钟检查一次产出进度
+watch -n 600 'ls -la shared_workspace/*/ | tail -20'
+```
+
+### 5. 超时恢复：`--from-stage` 中继
+如果某个 stage 超时，不要从头重跑。检查已产出文件后从中继：
+```bash
+python3 -m orchestrator.cli run --topic "相同主题" --from-stage {下一个stage}
+```
+
+### 6. 运行质量检查清单
+
+| 检查项 | 通过标准 |
+|--------|---------|
+| hypothesis 引用 | 无编造 arXiv ID/DOI；≥60% 近5年；所有引用 `text_chars >= 100` |
+| data_engineer 数据量 | 实际缓存 < 100MB（非 TB 级理论估算） |
+| quant_analyst 策略数 | ≥3 种策略对比，有参数热力图 |
+| risk_auditor 结论 | 有明确的 GO/NO-GO 裁决，附统计检验 |
+| strategy_writer | 根据审计结论写策略报告或失败分析，不强行包装 |
+
+### 已验证的成功模式
+
+- **data_engineer 降级策略**：当 tick 数据不可用时，诚实降级到 daily/hourly，用代码生成合成高频特征
+- **quant_analyst 多策略对比**：同时测试 6+ 种策略变体，用参数热力图识别最优
+- **risk_auditor 严格标准**：PBO < 0.50、参数稳定性 CV < 1.0、排列检验 p < 0.05
+- **strategy_writer 诚实**：NO-GO 时写失败分析而非强行包装，附改进建议和重新审计清单
 
 ## 全局约束
 

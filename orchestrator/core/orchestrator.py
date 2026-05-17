@@ -18,11 +18,11 @@ from orchestrator.clients.data_router import DataRouterClient
 
 # Per-agent timeouts (seconds)
 AGENT_TIMEOUTS = {
-    "hypothesis": 3600,      # 1h — literature review needs time
-    "data_engineer": 1800,   # 30m
-    "quant_analyst": 1800,   # 30m
-    "risk_auditor": 1800,    # 30m
-    "strategy_writer": 1800, # 30m
+    "hypothesis": 7200,      # 2h — literature review needs time
+    "data_engineer": 7200,   # 2h
+    "quant_analyst": 7200,   # 2h
+    "risk_auditor": 7200,    # 2h
+    "strategy_writer": 7200, # 2h
 }
 
 console = Console()

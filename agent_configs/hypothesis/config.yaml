@@ -18,7 +18,7 @@ api_server:
 # ── 工具配置 ──────────────────────────────────────
 tools:
   enabled:
-    - web_search        # Tavily 搜索：仅限解释不熟悉的金融/计量经济学专业概念
+    - web_search        # 🚨 Tavily 额度紧张（≈200/1000 剩余）。仅限解释不熟悉的概念，每次任务最多 2 次调用
     # - browser         # ← 禁用：容器内无浏览器引擎，使用 WebBridge 替代
     - terminal          # ipython / bash 执行（用于调用 WebBridge 客户端、安装 Python 包）
     - file              # 文件读写

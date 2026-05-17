@@ -70,19 +70,95 @@ def _check_navigate_success(r):
     return r.get("ok") is True and r.get("data", {}).get("success") is True
 
 
+def _extract_text_from_tree(node, lines=None, seen=None, depth=0):
+    """Recursively extract all text from snapshot accessibility tree.
+    
+    The snapshot tree is deeply nested. Top-level 'tree' array may have
+    only 2-3 nodes (banner, main, footer), but each contains many children.
+    
+    Avoids duplicates by skipping InlineTextBox nodes (their text is already
+    in the parent's 'name' field) and tracking seen text.
+    """
+    if lines is None:
+        lines = []
+    if seen is None:
+        seen = set()
+    if isinstance(node, dict):
+        role = node.get("role", "")
+        # Skip InlineTextBox — text already captured in parent StaticText's 'name'
+        if role == "InlineTextBox":
+            return lines
+        name = node.get("name", "")
+        if name and name.strip() and not name.startswith("\n"):
+            text = name.strip()
+            if text not in seen:
+                seen.add(text)
+                lines.append("  " * depth + text)
+        for child in node.get("children", []):
+            _extract_text_from_tree(child, lines, seen, depth + 1)
+    elif isinstance(node, list):
+        for child in node:
+            _extract_text_from_tree(child, lines, seen, depth)
+    return lines
+
+
+def _format_extracted_text(lines, max_chars=15000):
+    """Format extracted lines into a readable text block."""
+    text = "\n".join(lines)
+    if len(text) > max_chars:
+        text = text[:max_chars] + f"\n\n... [truncated, total {len(text)} chars]"
+    return text
+
+
 def cmd_fetch(args):
-    """Navigate (new tab) + snapshot in one call."""
+    """Navigate (new tab) + snapshot + text extraction in one call."""
     r1 = api_request("navigate", {"url": args.url, "newTab": True}, args.session)
     if not _check_navigate_success(r1):
         print(json.dumps({"navigate_error": r1}, indent=2))
         return
+    
+    # Wait briefly for dynamic content to load
+    import time
+    time.sleep(2)
+    
     r2 = api_request("snapshot", {}, args.session)
-    print(json.dumps(r2, indent=2))
+    
+    # Extract all text from the nested tree
+    tree = r2.get("data", {}).get("tree", [])
+    extracted_lines = _extract_text_from_tree(tree)
+    extracted_text = _format_extracted_text(extracted_lines)
+    
+    # Return both raw snapshot and extracted text
+    result = {
+        "ok": r2.get("ok"),
+        "url": r2.get("data", {}).get("url"),
+        "title": r2.get("data", {}).get("title"),
+        "extracted_text": extracted_text,
+        "text_chars": len(extracted_text),
+        "tree_top_nodes": len(tree),
+        "raw_snapshot": r2.get("data", {}),
+    }
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 def cmd_snapshot(args):
     r = api_request("snapshot", {}, args.session)
-    print(json.dumps(r, indent=2))
+    
+    # Extract all text from the nested tree
+    tree = r.get("data", {}).get("tree", [])
+    extracted_lines = _extract_text_from_tree(tree)
+    extracted_text = _format_extracted_text(extracted_lines)
+    
+    result = {
+        "ok": r.get("ok"),
+        "url": r.get("data", {}).get("url"),
+        "title": r.get("data", {}).get("title"),
+        "extracted_text": extracted_text,
+        "text_chars": len(extracted_text),
+        "tree_top_nodes": len(tree),
+        "raw_snapshot": r.get("data", {}),
+    }
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 def cmd_click(args):
@@ -124,8 +200,27 @@ def cmd_search(args):
     if not _check_navigate_success(r1):
         print(json.dumps({"navigate_error": r1}, indent=2))
         return
+    
+    import time
+    time.sleep(2)
+    
     r2 = api_request("snapshot", {}, args.session)
-    print(json.dumps(r2, indent=2))
+    
+    # Extract all text from the nested tree
+    tree = r2.get("data", {}).get("tree", [])
+    extracted_lines = _extract_text_from_tree(tree)
+    extracted_text = _format_extracted_text(extracted_lines)
+    
+    result = {
+        "ok": r2.get("ok"),
+        "url": r2.get("data", {}).get("url"),
+        "title": r2.get("data", {}).get("title"),
+        "extracted_text": extracted_text,
+        "text_chars": len(extracted_text),
+        "tree_top_nodes": len(tree),
+        "raw_snapshot": r2.get("data", {}),
+    }
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 def cmd_download(args):
@@ -153,6 +248,16 @@ fetch("{args.url}")
 '''
     r2 = api_request("evaluate", {"code": fetch_code}, args.session)
     print(json.dumps(r2, indent=2))
+
+
+def cmd_save_pdf(args):
+    """Save current page as PDF using WebBridge save_as_pdf API."""
+    pdf_args = {}
+    if args.output:
+        pdf_args["file_name"] = args.output
+    
+    r = api_request("save_as_pdf", pdf_args, args.session)
+    print(json.dumps(r, indent=2))
 
 
 def main():
@@ -208,6 +313,10 @@ def main():
     p = sub.add_parser("download", help="Download a file via WebBridge (returns base64)")
     p.add_argument("--url", required=True)
     p.add_argument("--session", required=True)
+
+    p = sub.add_parser("save_pdf", help="Save current page as PDF to /tmp/kimi-webbridge-pdfs/")
+    p.add_argument("--session", required=True)
+    p.add_argument("--output", default="", help="Output file name (optional)")
 
     args = parser.parse_args()
     if not args.cmd:

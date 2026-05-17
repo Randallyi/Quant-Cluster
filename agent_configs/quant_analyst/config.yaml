@@ -16,7 +16,7 @@ tools:
   enabled:
     - terminal
     # - browser         # ← 禁用：容器内无浏览器引擎，使用 WebBridge 替代
-    - web_search
+    - web_search        # 🚨 Tavily 额度紧张（≈200/1000 剩余）。仅限解释不熟悉的概念，每次任务最多 2 次调用
     - file
     - memory
     - vision

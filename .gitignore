@@ -64,3 +64,14 @@ Thumbs.db
 orchestrator/orchestrator.db
 orchestrator/orchestrator.db-*
 
+# Playwright MCP temporary files
+.playwright-mcp/
+
+# Temporary SQLite databases created by tools
+None
+
+# Session/task artifacts
+*.session
+*.task
+.tasks/
+
