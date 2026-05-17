@@ -204,6 +204,18 @@ open shared_workspace/archive/run_*/final_report.html
 bash stop.sh
 ```
 
+### 8. 打开 Monitor Dashboard（可选）
+
+```bash
+# 启动后访问
+open http://localhost:8080
+```
+
+实时查看：
+- Pipeline 各 stage 进度
+- 每个 Agent 的容器健康、API 调用、工具调用
+- 实时日志流
+
 ---
 
 ## 技术栈
@@ -216,6 +228,7 @@ bash stop.sh
 | **Data Router** | Python FastAPI + IBKR TWS API (ib_insync) + SQLite Cache |
 | **Orchestrator** | Python asyncio + Rich CLI + Jinja2 HTML Reporter |
 | **可视化** | ECharts (CDN) + 暗色主题 CSS |
+| **Monitor Dashboard** | FastAPI + WebSocket + 原生 JS |
 | **部署** | Docker Compose |
 
 ---
