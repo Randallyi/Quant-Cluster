@@ -1,5 +1,6 @@
 import pytest
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -34,7 +35,7 @@ def test_end_to_end_global_equity(tmp_path):
         "end_date": "2024-01-30",
         "initial_cash": 100000,
         "feature_matrix_path": str(feature_path),
-        "params": {"signal": 1.0},
+        "signals": {"SPY": [1.0] * 30},
         "costs": {"commission_pct": 0.0005, "slippage_pct": 0.0002},
     }
     config_path = tmp_path / "config.json"
@@ -71,13 +72,34 @@ def test_end_to_end_global_equity(tmp_path):
     # stdout may contain multiple JSON dumps; parse the first object
     out, _ = json.JSONDecoder().raw_decode(result.stdout.strip())
     assert isinstance(out, dict)
-    assert "total_return_pct" in out or "sharpe" in out or "max_drawdown_pct" in out
+    required_keys = ("total_return", "sharpe", "max_drawdown", "num_trades")
+    for key in required_keys:
+        assert key in out, f"Missing key: {key}"
+    assert isinstance(out["total_return"], (int, float))
+    assert not math.isnan(out["total_return"])
 
     # Verify artifacts
     assert (run_dir / "artifacts" / "equity.csv").exists()
     assert (run_dir / "artifacts" / "trades.csv").exists()
+    assert (run_dir / "artifacts" / "ohlcv_SPY.csv").exists()
+    assert (run_dir / "artifacts" / "positions.csv").exists()
+    assert (run_dir / "artifacts" / "metrics.csv").exists()
     assert (run_dir / "run_card.json").exists()
     assert (run_dir / "run_card.md").exists()
+
+    # Verify trades happened
+    trades_df = pd.read_csv(run_dir / "artifacts" / "trades.csv")
+    assert len(trades_df) > 0, "Engine should have generated trades"
+
+    # Verify equity curve
+    equity_df = pd.read_csv(run_dir / "artifacts" / "equity.csv")
+    assert len(equity_df) == 30, "Equity curve should have 30 rows"
+    assert equity_df["equity"].iloc[0] > 0
+    assert equity_df["equity"].iloc[-1] > 0
+
+    # Verify positions
+    positions_df = pd.read_csv(run_dir / "artifacts" / "positions.csv")
+    assert len(positions_df) == 30
 
     # Verify run_card content
     run_card = json.loads((run_dir / "run_card.json").read_text())
