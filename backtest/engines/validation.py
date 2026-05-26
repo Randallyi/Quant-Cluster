@@ -16,30 +16,13 @@ is present, or invoked directly on backtest outputs.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
 
-
-@dataclass
-class TradeRecord:
-    symbol: str
-    direction: int
-    entry_price: float
-    exit_price: float
-    entry_time: datetime
-    exit_time: datetime
-    size: float
-    leverage: float
-    pnl: float
-    pnl_pct: float
-    exit_reason: str
-    holding_bars: int
-    commission: float
+from backtest.engines.base import TradeRecord
 
 
 # ─── Monte Carlo Permutation Test ───
