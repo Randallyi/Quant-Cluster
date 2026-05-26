@@ -18,7 +18,6 @@ from pathlib import Path
 
 # Allow importing from project root
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_PROJECT_ROOT))
 
 import pandas as pd
 
@@ -188,8 +187,17 @@ def _build_signal_map(engine: str, config: dict, data_map: dict[str, pd.DataFram
             for code, values in raw_signals.items():
                 if code in data_map:
                     idx = data_map[code].index
-                    if isinstance(values, list) and len(values) == len(idx):
-                        signal_map[code] = pd.Series(values, index=idx)
+                    if isinstance(values, list):
+                        if len(values) == len(idx):
+                            signal_map[code] = pd.Series(values, index=idx)
+                        else:
+                            raise BacktestToolError(
+                                error_type="CONFIG_INVALID",
+                                message=f"Signal list length mismatch for {code}: expected {len(idx)}, got {len(values)}",
+                                suggestion="Ensure signal lists match the data index length",
+                                field=f"params.signals.{code}",
+                                retryable=True,
+                            )
                     else:
                         signal_map[code] = pd.Series(float(values), index=idx)
         # Fill missing codes with neutral pass-through (1.0)
@@ -258,7 +266,7 @@ def _run_engine(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Backtest engine CLI wrapper")
-    parser.add_argument("--engine", required=True, choices=list(_SCHEMAS), help="Backtest engine to use")
+    parser.add_argument("--engine", required=True, help="Backtest engine to use")
     parser.add_argument("--config", type=str, default=None, help="Path to config JSON file")
     parser.add_argument("--out-dir", type=str, default=None, help="Output directory for run artifacts")
     parser.add_argument("--dry-run", action="store_true", help="Validate config and data without running")
@@ -309,6 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     # Dry-run: stop here
     if args.dry_run:
         dry_result = {
+            "status": "ok",
             "dry_run": True,
             "engine": args.engine,
             "config_path": args.config,
@@ -334,24 +343,13 @@ def main(argv: list[str] | None = None) -> int:
     # Run engine
     metrics = _run_engine(args.engine, config, data_map, signal_map, run_dir)
 
-    # The engines already call write_run_card internally, but we ensure it is called
-    # explicitly here as well in case a future engine skips it.
-    from backtest.engines.run_card import write_run_card
-
-    write_run_card(
-        run_dir=run_dir,
-        config=config,
-        metrics=metrics,
-        data_sources=[config.get("source", "")],
-        strategy_path=run_dir / "code" / "signal_engine.py",
-    )
-
     # Print metrics to stdout
     print(json.dumps({k: v for k, v in metrics.items() if not isinstance(v, dict)}, indent=2))
     return 0
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(_PROJECT_ROOT))
     try:
         sys.exit(main())
     except BacktestToolError as exc:
