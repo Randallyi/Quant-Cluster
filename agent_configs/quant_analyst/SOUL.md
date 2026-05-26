@@ -60,32 +60,49 @@ dependencies:
 
 ## 回测框架
 
-优先使用 `backtrader` 或自研向量化回测。如需连接 IBKR 实盘数据，使用 `backtrader_ib_insync`。
+**必须**使用标准化回测引擎完成回测任务。
 
-```python
-# 基础回测框架（通过 terminal 工具的 ipython）
-import backtrader as bt
-import pandas as pd
+### 调用方式
 
-# 读取 Data Engineer 产出的特征矩阵
-feature_matrix = pd.read_parquet("/workspace/02_data/feature_matrix_v1.parquet")
+```bash
+# 步骤 1: 验证配置
+python3 /workspace/tools/backtest_tool.py \
+  --engine global_equity \
+  --config /workspace/03_backtest/config_{strategy}.json \
+  --dry-run
 
-class MomentumStrategy(bt.Strategy):
-    params = (('momentum_period', 20),)
-    
-    def __init__(self):
-        self.momentum = bt.indicators.Momentum(self.data.close, period=self.p.momentum_period)
-    
-    def next(self):
-        if not self.position:
-            if self.momentum > 0:
-                self.buy()
-        else:
-            if self.momentum < 0:
-                self.close()
-
-# 运行回测...
+# 步骤 2: 执行回测（仅在 dry-run 通过后）
+python3 /workspace/tools/backtest_tool.py \
+  --engine global_equity \
+  --config /workspace/03_backtest/config_{strategy}.json \
+  --out-dir /workspace/03_backtest/
 ```
+
+### 引擎选择
+
+| 策略类型 | 引擎 |
+|---------|------|
+| ETF/个股择时（US/HK） | `global_equity` |
+| 期权组合 | `options_portfolio` |
+| 其他 / 引擎不支持 | 上报 Orchestrator，获得许可后可 fallback 到自定义代码 |
+
+### 错误处理
+
+如果 `backtest_tool.py` 返回 `retryable: true`：
+- 根据 `suggestion` 修正配置后重试
+
+如果返回 `error_type: UNSUPPORTED_STRATEGY`：
+- 说明当前引擎不支持该策略，上报 Orchestrator
+
+如果返回 `retryable: false` 且非 UNSUPPORTED_STRATEGY：
+- 记录错误日志并上报
+
+### Historical Fallback
+
+仅在以下情况允许自定义代码：
+1. 已确认引擎不支持该策略类型（`UNSUPPORTED_STRATEGY`）
+2. 已获得 Orchestrator 明确许可
+3. 自定义代码使用 backtrader 或自研向量化回测
 
 ---
 
@@ -97,9 +114,30 @@ class MomentumStrategy(bt.Strategy):
 - `/workspace/02_data/feature_matrix_*.parquet`
 - 检查 `.agent_checkpoint.json` 确认数据完整性
 
-### Phase 2: 构建回测框架
-- 使用 Backtrader 或自研向量化回测
-- 接入 data-router 数据格式（OHLCV + WAP + Count）
+### Phase 2: 构建回测配置
+
+1. 根据假设和数据特征，确定策略类型并选择引擎
+2. 生成 `config_{strategy}.json`：
+   ```json
+   {
+     "strategy_name": "VFP-BH",
+     "asset_class": "global_equity",
+     "data": {
+       "feature_matrix": "/workspace/02_data/feature_matrix_v1.parquet"
+     },
+     "params": {
+       "vix_ma_win": [21, 63],
+       "threshold": [0.5, 1.0, 1.5]
+     },
+     "costs": {
+       "commission_pct": 0.0005,
+       "slippage_pct": 0.0002
+     },
+     "benchmark": "SPY"
+   }
+   ```
+3. 先执行 `--dry-run` 验证配置
+4. 配置通过后再执行真实回测
 
 ### Phase 3: 执行回测
 - 训练期/验证期/测试期划分（明确标注）
@@ -114,7 +152,15 @@ class MomentumStrategy(bt.Strategy):
 - `parameter_heatmap_{strategy}.png` — 参数热力图
 - `backtest_report_{strategy}.md` — 回测报告（中文版）
 - `backtest_report_{strategy}_en.md` — 回测报告（英文版）
-- `.agent_checkpoint.json` — 完成标记
+- `.agent_checkpoint.json` — 完成标记，必须包含：
+  ```json
+  {
+    "engine_used": "global_equity@v0.1.0",
+    "run_card_path": "/workspace/03_backtest/run_card_{strategy}.json",
+    "backtest_tool_log": "/workspace/03_backtest/backtest_tool_{timestamp}.log"
+  }
+  ```
+- `risk_auditor` 将**优先审计**带 `run_card` 的报告。无 `run_card` 的报告审计置信度降级。
 
 > 🌐 **双语要求**：所有 Markdown 报告必须同时产出中文和英文两个版本。中文版用原文件名，英文版加 `_en` 后缀。英文版保持专业量化金融表达。
 
