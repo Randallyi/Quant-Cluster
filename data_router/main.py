@@ -13,7 +13,7 @@ ib_util.patchAsyncio()
 
 from cache.manager import CacheManager
 from ibkr.client import IBKRClient
-from routers import data
+from routers import data, ibkr, sources, yfinance
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,11 +57,14 @@ def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     app = FastAPI(
         title="Quant Cluster — Data Router",
-        description="IBKR historical data gateway for the quant trading cluster.",
-        version="0.1.0",
+        description="Multi-source historical data gateway for the quant trading cluster.",
+        version="0.2.0",
         lifespan=lifespan,
     )
     app.include_router(data.router)
+    app.include_router(ibkr.router)
+    app.include_router(yfinance.router)
+    app.include_router(sources.router)
 
     @app.get("/health")
     async def health():
