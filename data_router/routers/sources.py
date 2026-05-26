@@ -16,6 +16,7 @@ router = APIRouter(prefix="/sources", tags=["sources"])
 
 _ibkr_client: Optional[IBKRClient] = None
 _cache = CacheManager()
+_yf_loader = YFinanceLoader()
 
 
 def _get_ibkr_client() -> Optional[IBKRClient]:
@@ -53,8 +54,7 @@ async def list_sources():
     )
 
     # YFinance
-    yf_loader = YFinanceLoader()
-    yf_health = yf_loader.health()
+    yf_health = _yf_loader.health()
     yf_cache = cache_stats.get("sources", {}).get("yfinance", {})
     sources.append(
         SourceHealth(

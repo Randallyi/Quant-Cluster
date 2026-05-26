@@ -54,6 +54,9 @@ class YFinanceLoader:
             )
         except Exception as exc:
             logger.warning("yfinance history fetch failed for %s: %s", ticker, exc)
+            # Propagate rate-limit so router can classify as NETWORK error
+            if "Rate limit" in str(exc) or "Too Many Requests" in str(exc):
+                raise
             return []
 
         if df.empty:
@@ -90,6 +93,9 @@ class YFinanceLoader:
             info = yf.Ticker(ticker).info
         except Exception as exc:
             logger.warning("yfinance info fetch failed for %s: %s", ticker, exc)
+            # Propagate rate-limit so router can classify as NETWORK error
+            if "Rate limit" in str(exc) or "Too Many Requests" in str(exc):
+                raise
             return None
 
         if not info:

@@ -62,9 +62,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(data.router)
-    app.include_router(ibkr.router)
-    app.include_router(yfinance.router)
-    app.include_router(sources.router)
+    app.include_router(ibkr.router, prefix="/data")
+    app.include_router(yfinance.router, prefix="/data")
+    app.include_router(sources.router, prefix="/data")
 
     @app.get("/health")
     async def health():
