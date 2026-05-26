@@ -81,3 +81,46 @@ class DataErrorResponse(BaseModel):
     message: str
     suggestion: str
     contract: Optional[Contract] = None
+    source: str = ""
+    fallback_available: list[str] = Field(default_factory=list)
+
+
+# yfinance historical data request
+class YFHistoricalRequest(BaseModel):
+    ticker: str
+    start: str = ""
+    end: str = ""
+    interval: Literal["1d", "1wk", "1mo"] = "1d"
+    auto_adjust: bool = True
+
+
+# Fundamental data snapshot
+class FundamentalData(BaseModel):
+    ticker: str
+    market_cap: Optional[float] = None
+    pe_ratio: Optional[float] = None
+    pb_ratio: Optional[float] = None
+    eps: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    last_updated: str = ""
+
+
+# Unified response wrapper for all endpoints
+class DataResponse(BaseModel):
+    status: Literal["success", "error"]
+    source: str = ""
+    request_id: str = ""
+    data: list = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    cached: bool = False
+    fetch_time_ms: int = 0
+
+
+# Source health for /data/sources endpoint
+class SourceHealth(BaseModel):
+    name: str
+    available: bool
+    markets: list[str] = Field(default_factory=list)
+    latency_ms: Optional[int] = None
+    message: str = ""
+    cache_stats: dict = Field(default_factory=dict)
