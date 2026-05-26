@@ -32,3 +32,6 @@ def test_dummy_engine_runs(sample_data_map, sample_signal_map, tmp_run_dir):
     assert metrics["num_trades"] >= 0
     assert (tmp_run_dir / "artifacts" / "equity.csv").exists()
     assert (tmp_run_dir / "artifacts" / "trades.csv").exists()
+
+    assert metrics["total_return"] != 0  # With sample signals, there should be some return
+    assert metrics["num_trades"] > 0     # There should be at least one trade

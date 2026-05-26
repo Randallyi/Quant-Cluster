@@ -12,7 +12,6 @@ import importlib
 import json
 import logging
 import re as _re
-import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -174,7 +173,7 @@ def _load_optimizer(config: Dict[str, Any]) -> Optional[Callable]:
         mod = importlib.import_module(f"backtest.optimizers.{opt_name}")
         return lambda ret, pos, dates: mod.optimize(ret, pos, dates, **opt_params)
     except (ImportError, AttributeError) as e:
-        print(f"[WARN] Failed to load optimizer '{opt_name}': {e}, falling back to equal weight")
+        logger.warning("Failed to load optimizer '%s': %s, falling back to equal weight", opt_name, e)
         return None
 
 
@@ -307,15 +306,13 @@ class BaseEngine(ABC):
         Returns:
             Metrics dictionary.
         """
-        codes = config.get("codes", [])
         interval = config.get("interval", "1D")
         extra_fields = config.get("extra_fields") or None
 
         # 1. data_map and signal_map are passed directly by the caller
         valid_codes = sorted(c for c in signal_map if c in data_map)
         if not valid_codes:
-            print(json.dumps({"error": "No valid signals generated"}))
-            sys.exit(1)
+            raise ValueError("No valid signals generated")
 
         # 2. Pre-compute target weights (with optimizer)
         opt_fn = _load_optimizer(config)
