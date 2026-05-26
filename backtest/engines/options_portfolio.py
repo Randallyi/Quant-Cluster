@@ -15,7 +15,6 @@ Artifacts: equity.csv, metrics.csv, trades.csv, greeks.csv.
 """
 
 import json
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -238,7 +237,7 @@ def run_options_backtest(
         Metrics dictionary.
 
     Raises:
-        SystemExit: When no data is fetched.
+        ValueError: When no data is fetched or no equity data generated.
     """
     codes = config.get("codes", [])
     initial_cash = config.get("initial_cash", 1_000_000)
@@ -251,8 +250,7 @@ def run_options_backtest(
     iv_curvature = options_cfg.get("iv_curvature", 0.0)  # v2: smile curvature
 
     if not data_map:
-        print(json.dumps({"error": "No data fetched"}))
-        sys.exit(1)
+        raise ValueError("No data fetched")
 
     # Compute implied volatility (approximated by historical volatility)
     iv_map: Dict[str, pd.Series] = {}
@@ -483,8 +481,7 @@ def run_options_backtest(
     # Compute metrics
     equity_df = pd.DataFrame(equity_records)
     if equity_df.empty:
-        print(json.dumps({"error": "No equity data generated"}))
-        sys.exit(1)
+        raise ValueError("No equity data generated")
 
     equity_series = equity_df.set_index("timestamp")["equity"]
     metrics = _calc_options_metrics(equity_series, initial_cash, trade_records, bars_per_year)
