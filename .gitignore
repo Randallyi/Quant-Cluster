@@ -13,7 +13,7 @@ auth.json
 # Runtime artifacts
 shared_workspace/
 !shared_workspace/.gitkeep
-data_router/cache/
+data_router/cache/*.db
 
 # Agent runtime (auto-generated when containers start)
 agent_configs/*/.cache/
