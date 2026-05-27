@@ -39,6 +39,14 @@ dependencies:
 
 ---
 
+## 历史研究参考
+
+如果上下文中有 [历史研究记忆] 区块，请：
+1. 查看之前同类策略的 SOP 和失败分析
+2. 如当前为 GO，对比历史 GO 策略的实盘注意事项
+3. 如当前为 NO-GO，参考历史 NO-GO 的改进建议是否已被采纳
+4. 在 trading_sop 或 strategy_failure_analysis 末尾增加「历史版本对比」章节
+
 ## 触发条件
 
 - 上游 Risk Auditor Agent 已完成，且审计结论可用
