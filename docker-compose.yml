@@ -12,6 +12,8 @@ services:
       - TWS_PORT=7497
       - TWS_CLIENT_ID=100
       - CACHE_DB=/app/cache/data_cache.db
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
     volumes:
       - ./data_router/cache:/app/cache
       - ./shared_workspace:/workspace
