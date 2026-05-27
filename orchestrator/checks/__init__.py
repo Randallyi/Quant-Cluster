@@ -13,5 +13,10 @@ def register(cls: type[Check]) -> type[Check]:
 
 
 # Auto-import all submodules to trigger @register decorators
+import sys
+
 for _, _modname, _ in pkgutil.iter_modules(__path__):
-    __import__(f"{__package__}.{_modname}")
+    try:
+        __import__(f"{__package__}.{_modname}")
+    except ImportError as exc:
+        print(f"Warning: could not import check module {_modname!r}: {exc}", file=sys.stderr)

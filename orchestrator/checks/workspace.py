@@ -4,6 +4,7 @@ from typing import Optional
 
 from orchestrator.checks.base import Check, CheckResult
 from orchestrator.checks import register
+from orchestrator.core.dag import WORKSPACE_ROOT
 
 
 @register
@@ -15,7 +16,6 @@ class WorkspaceCheck(Check):
     EXPECTED_DIRS = ["01_hypothesis", "02_data", "03_backtest", "04_risk", "05_strategy"]
 
     def __init__(self, workspace_root: Optional[Path] = None):
-        from orchestrator.core.dag import WORKSPACE_ROOT
         self.workspace_root = workspace_root or WORKSPACE_ROOT
 
     async def run(self) -> CheckResult:
