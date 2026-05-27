@@ -1,6 +1,8 @@
 """Tests for HermesHealthCheck."""
+import asyncio
 from unittest.mock import patch, AsyncMock, MagicMock
 
+import aiohttp
 import pytest
 
 from orchestrator.checks.hermes_health import HermesHealthCheck
@@ -70,4 +72,44 @@ async def test_hermes_fails_when_some_offline():
 
     assert result.passed is False
     assert "hypothesis" in result.todo
-    assert "请检查 Docker 容器状态" in result.todo
+    assert "Please check Docker container status" in result.todo
+
+
+@pytest.mark.asyncio
+async def test_hermes_fails_on_connection_error():
+    """Mock session.get raises aiohttp.ClientError → passed=False."""
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.get = MagicMock(side_effect=aiohttp.ClientError("connection refused"))
+
+    mock_client_session = AsyncMock()
+    mock_client_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("aiohttp.ClientSession", return_value=mock_client_session):
+        check = HermesHealthCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert "hypothesis" in result.message
+
+
+@pytest.mark.asyncio
+async def test_hermes_fails_on_timeout():
+    """Mock session.get raises asyncio.TimeoutError → passed=False."""
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.get = MagicMock(side_effect=asyncio.TimeoutError())
+
+    mock_client_session = AsyncMock()
+    mock_client_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("aiohttp.ClientSession", return_value=mock_client_session):
+        check = HermesHealthCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert "hypothesis" in result.message

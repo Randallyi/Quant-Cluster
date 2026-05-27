@@ -1,4 +1,6 @@
 """Hermes agent health check via HTTP /health endpoints."""
+import asyncio
+
 import aiohttp
 
 from orchestrator.checks.base import Check, CheckResult
@@ -31,7 +33,7 @@ class HermesHealthCheck(Check):
                     async with session.get(url) as resp:
                         if resp.status != 200:
                             failed.append(agent)
-                except aiohttp.ClientError:
+                except (aiohttp.ClientError, asyncio.TimeoutError):
                     failed.append(agent)
 
         if not failed:
@@ -40,7 +42,7 @@ class HermesHealthCheck(Check):
                 passed=True,
                 category=self.category,
                 severity=self.severity,
-                message=f"{total}/{total} Agent 响应正常",
+                message=f"{total}/{total} agents responding.",
             )
 
         return CheckResult(
@@ -49,5 +51,5 @@ class HermesHealthCheck(Check):
             category=self.category,
             severity=self.severity,
             message=f"Failed agents: {', '.join(failed)}.",
-            todo=f"请检查 Docker 容器状态: {', '.join(failed)}",
+            todo=f"Please check Docker container status: {', '.join(failed)}",
         )
