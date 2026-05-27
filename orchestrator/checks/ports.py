@@ -1,6 +1,7 @@
 """Port availability check with auto-kill for residual processes."""
 import asyncio
 import os
+import signal
 from typing import Dict, List, Optional
 
 from orchestrator.checks.base import Check, CheckResult
@@ -15,17 +16,15 @@ class PortAvailabilityCheck(Check):
     severity = "fatal"
     EXPECTED_PORTS = [8642, 8643, 8644, 8645, 8646, 8888, 10086, 8080]
     OUR_PATTERNS = ["hermes", "quant-cluster", "webbridge", "uvicorn", "fastapi"]
+    KILL_RETRY_DELAY = 2
 
     async def _get_listener_pid(self, port: int) -> Optional[int]:
         """Return PID listening on port, or None if free."""
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "lsof", "-Pi", f":{port}", "-sTCP:LISTEN", "-t",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-        except (FileNotFoundError, PermissionError):
-            return None
+        proc = await asyncio.create_subprocess_exec(
+            "lsof", "-Pi", f":{port}", "-sTCP:LISTEN", "-t",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
         stdout, _ = await proc.communicate()
         if proc.returncode != 0:
             return None
@@ -36,14 +35,11 @@ class PortAvailabilityCheck(Check):
 
     async def _get_process_info(self, pid: int) -> Dict[str, str]:
         """Return dict with process name (comm) and args for PID."""
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "ps", "-p", str(pid), "-o", "comm=,args=",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-        except (FileNotFoundError, PermissionError):
-            return {"comm": "", "args": ""}
+        proc = await asyncio.create_subprocess_exec(
+            "ps", "-p", str(pid), "-o", "comm=,args=",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
         stdout, _ = await proc.communicate()
         if proc.returncode != 0:
             return {"comm": "", "args": ""}
@@ -71,33 +67,45 @@ class PortAvailabilityCheck(Check):
         fix_attempted = False
         fix_success = True
 
-        for port in self.EXPECTED_PORTS:
-            pid = await self._get_listener_pid(port)
-            if pid is None:
-                continue
-
-            if await self._is_docker_process(pid):
-                continue
-
-            if await self._is_our_residual(pid):
-                fix_attempted = True
-                try:
-                    os.kill(pid, 9)
-                except (OSError, ProcessLookupError):
-                    fix_success = False
-                    blocked.append(f"{port} (PID {pid} — kill failed)")
+        try:
+            for port in self.EXPECTED_PORTS:
+                pid = await self._get_listener_pid(port)
+                if pid is None:
                     continue
 
-                await asyncio.sleep(2)
-                pid_after = await self._get_listener_pid(port)
-                if pid_after is not None:
-                    fix_success = False
-                    blocked.append(f"{port} (PID {pid} — still occupied after kill)")
-                continue
+                if await self._is_docker_process(pid):
+                    continue
 
-            # External process — do NOT kill
-            info = await self._get_process_info(pid)
-            blocked.append(f"{port} (PID {pid} — {info['comm']})")
+                if await self._is_our_residual(pid):
+                    fix_attempted = True
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        fix_success = False
+                        blocked.append(f"{port} (PID {pid} — kill failed)")
+                        continue
+
+                    await asyncio.sleep(self.KILL_RETRY_DELAY)
+                    pid_after = await self._get_listener_pid(port)
+                    if pid_after is not None:
+                        fix_success = False
+                        blocked.append(f"{port} (PID {pid} — still occupied after kill)")
+                    continue
+
+                # External process — do NOT kill
+                info = await self._get_process_info(pid)
+                blocked.append(f"{port} (PID {pid} — {info['comm']})")
+        except (FileNotFoundError, PermissionError):
+            return CheckResult(
+                name=self.name,
+                passed=False,
+                category=self.category,
+                severity=self.severity,
+                message="lsof/ps not found — cannot verify port availability",
+                fix_attempted=False,
+                fix_success=False,
+                todo="请安装 lsof",
+            )
 
         if blocked:
             return CheckResult(
