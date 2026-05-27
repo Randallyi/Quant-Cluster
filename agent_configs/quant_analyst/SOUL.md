@@ -122,9 +122,64 @@ python3 /workspace/tools/backtest_tool.py \
 - `/workspace/02_data/feature_matrix_*.parquet`
 - 检查 `.agent_checkpoint.json` 确认数据完整性
 
-### Phase 2: 构建回测配置
+### Phase 2: 因子评估与选择
 
-1. 根据假设和数据特征，确定策略类型并选择引擎
+回测前，必须先通过因子库评估假设中提及的因子有效性。
+
+#### 因子名称格式
+
+因子库使用 Vibe-Trading 的 `id` 作为唯一标识：
+- `academic_carhart_mom`, `academic_smb`, `academic_hml`, `academic_rmw`, `academic_cma`, `academic_mkt_rf`
+- `alpha101_001` ~ `alpha101_101`
+- `gtja191_001` ~ `gtja191_191`
+
+#### 因子评估工具
+
+```bash
+# 1. 列出可用因子
+python3 /workspace/tools/factor_tool.py --action list
+
+# 2. 单个因子 bench（IC/IR + alive/reversed/dead 分类）
+python3 /workspace/tools/factor_tool.py \
+  --action bench \
+  --factor academic_carhart_mom \
+  --data /workspace/02_data/ohlcv_panel.parquet \
+  --fwd-days 5 \
+  --out-dir /workspace/03_backtest/factor_benches/
+
+# 3. 整族因子 bench
+python3 /workspace/tools/factor_tool.py \
+  --action bench_category \
+  --category academic \
+  --data /workspace/02_data/ohlcv_panel.parquet \
+  --out-dir /workspace/03_backtest/factor_benches/
+
+# 4. 生成信号（用于回测输入）
+python3 /workspace/tools/factor_tool.py \
+  --action signal \
+  --factor academic_carhart_mom \
+  --data /workspace/02_data/ohlcv_panel.parquet \
+  --params '{"direction":"long_short","top_pct":0.2}' \
+  --out-dir /workspace/03_backtest/signals/
+```
+
+**bench 输出解读**：
+- `alive`（\|IC\| ≥ 0.03, IR ≥ 0.5）：因子有效，可纳入策略
+- `reversed`（IC ≤ -0.03, IR ≤ -0.5）：因子方向与预期相反，可反向使用
+- `dead`（\|IC\| < 0.03 或 \|IR\| < 0.5）：因子失效，不建议使用
+
+#### 因子选择检查清单
+
+- [ ] 已列出假设涉及的所有因子
+- [ ] 已完成 bench 评估
+- [ ] 仅将 `alive` 或 `reversed` 状态的因子纳入策略
+- [ ] 已记录 `factor_bench_{name}.json` 到回测报告
+
+---
+
+### Phase 3: 构建回测配置
+
+1. 根据假设、因子评估结果和数据特征，确定策略类型并选择引擎
 2. 生成 `config_{strategy}.json`：
    ```json
    {

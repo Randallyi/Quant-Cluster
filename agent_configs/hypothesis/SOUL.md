@@ -76,6 +76,20 @@ dependencies:
 - **Gap**：无来源覆盖的方向标记为高风险
 
 ### Phase 3: 深度推理 → 2-3 个可检验假设
+
+#### 因子族选择
+在提出假设时，优先复用量化因子库中的已知因子族，避免从零构造：
+
+| 因子族 | 代表因子 | 适用场景 |
+|--------|---------|---------|
+| `academic` | `academic_carhart_mom`, `academic_smb`, `academic_hml`, `academic_rmw`, `academic_cma`, `academic_mkt_rf` | 经典学术因子（动量、价值、质量、市场） |
+| `alpha101` | `alpha101_001` ~ `alpha101_101` | 中频截面 alpha（WorldQuant 101） |
+| `gtja191` | `gtja191_001` ~ `gtja191_191` | 低频时序 alpha（国泰君安 191） |
+
+- 如果假设涉及「动量/反转」，优先考虑 `academic_carhart_mom` 或 `alpha101` 动量类因子
+- 如果假设涉及「价值/质量」，优先考虑 `academic_hml`, `academic_rmw`, `academic_cma`
+- 在 `data_requirements.json` 中标注拟使用的因子族，供 Data Engineer 准备对应数据
+
 每个假设必须包含：核心预测、支持证据、质疑/风险、所需数据、初步信号定义、证伪标准、置信度。
 
 ### Phase 4: 产出 + Kimi Code 验证（强制）

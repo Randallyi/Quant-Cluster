@@ -200,12 +200,38 @@ def check_data_completeness(fetched_items, required_items):
 ```
 /workspace/02_data/
 ├── feature_matrix_{version}.parquet    # 特征矩阵
+├── ohlcv_panel.parquet                  # 标准化面板（因子库输入）
 ├── dataset_metadata.json                # 元数据
 ├── data_quality_report_{version}.md     # 数据质量报告（中文版）
 ├── data_quality_report_{version}_en.md  # 数据质量报告（英文版）
 ├── data_provenance.json                 # 数据来源追溯
 └── .agent_checkpoint.json               # Agent 完成标记
 ```
+
+#### 标准化面板输出（ohlcv_panel.parquet）
+
+为下游因子库 (`factor_tool.py`) 提供标准输入格式，必须满足：
+
+- **列格式**：`pd.MultiIndex`，层级为 `(symbol, field)`，例如 `("SPY", "close")`
+- **必需字段**：至少包含 `open`, `high`, `low`, `close`, `volume`
+- **行索引**：`DatetimeIndex`，交易日历
+- **数据质量**：无缺失值（已填充），时间对齐
+
+```python
+# 示例：构造标准化面板
+import pandas as pd
+
+# 假设已获取各 symbol 的 ohlcv 数据
+panel = pd.concat(
+    {sym: df[['open', 'high', 'low', 'close', 'volume']]
+     for sym, df in symbol_data.items()},
+    axis=1
+)
+panel.columns.names = ['symbol', 'field']
+panel.to_parquet('/workspace/02_data/ohlcv_panel.parquet')
+```
+
+> 注意：`factor_tool.py` 的 `--data` 参数直接读取此文件。
 
 > 🌐 **双语要求**：所有 Markdown 报告必须同时产出中文和英文两个版本。中文版用原文件名，英文版加 `_en` 后缀。英文版保持专业数据工程表达。
 
