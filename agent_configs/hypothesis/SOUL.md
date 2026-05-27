@@ -85,9 +85,11 @@ dependencies:
 | `academic` | `academic_carhart_mom`, `academic_smb`, `academic_hml`, `academic_rmw`, `academic_cma`, `academic_mkt_rf` | 经典学术因子（动量、价值、质量、市场） |
 | `alpha101` | `alpha101_001` ~ `alpha101_101` | 中频截面 alpha（WorldQuant 101） |
 | `gtja191` | `gtja191_001` ~ `gtja191_191` | 低频时序 alpha（国泰君安 191） |
+| `qlib158` | `qlib158_beta10`, `qlib158_cntp5`, `qlib158_corr10`, `qlib158_klen`, `qlib158_vstd5` 等 154 个 | 通用价量特征（Microsoft Qlib，全市场通用） |
 
-- 如果假设涉及「动量/反转」，优先考虑 `academic_carhart_mom` 或 `alpha101` 动量类因子
+- 如果假设涉及「动量/反转」，优先考虑 `academic_carhart_mom`、`alpha101` 动量类因子或 `qlib158` 的 `roc`/`beta` 系列
 - 如果假设涉及「价值/质量」，优先考虑 `academic_hml`, `academic_rmw`, `academic_cma`
+- 如果假设涉及「波动率/成交量」，优先考虑 `qlib158` 的 `vstd`/`vma`/`wvma` 系列或 `gtja191` 价量组合
 - 在 `data_requirements.json` 中标注拟使用的因子族，供 Data Engineer 准备对应数据
 
 每个假设必须包含：核心预测、支持证据、质疑/风险、所需数据、初步信号定义、证伪标准、置信度。

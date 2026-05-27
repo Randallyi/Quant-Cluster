@@ -132,6 +132,7 @@ python3 /workspace/tools/backtest_tool.py \
 - `academic_carhart_mom`, `academic_smb`, `academic_hml`, `academic_rmw`, `academic_cma`, `academic_mkt_rf`
 - `alpha101_001` ~ `alpha101_101`
 - `gtja191_001` ~ `gtja191_191`
+- `qlib158_beta10`, `qlib158_cntp5`, `qlib158_corr10`, `qlib158_klen`, `qlib158_vstd5` 等 154 个
 
 #### 因子评估工具
 
@@ -151,6 +152,13 @@ python3 /workspace/tools/factor_tool.py \
 python3 /workspace/tools/factor_tool.py \
   --action bench_category \
   --category academic \
+  --data /workspace/02_data/ohlcv_panel.parquet \
+  --out-dir /workspace/03_backtest/factor_benches/
+
+# 4. 批量 bench 通用价量因子（qlib158 全族 154 个）
+python3 /workspace/tools/factor_tool.py \
+  --action bench_category \
+  --category qlib158 \
   --data /workspace/02_data/ohlcv_panel.parquet \
   --out-dir /workspace/03_backtest/factor_benches/
 
