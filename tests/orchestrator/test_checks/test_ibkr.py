@@ -41,6 +41,17 @@ async def test_ibkr_fails_when_tws_unreachable():
     assert "Please start IB Gateway" in result.todo
 
 
+@pytest.mark.asyncio
+async def test_ibkr_fails_on_socket_timeout():
+    """socket.create_connection raises TimeoutError → passed=False."""
+    with patch("socket.create_connection", side_effect=TimeoutError):
+        check = IbkrGatewayCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert "Please start IB Gateway" in result.todo
+
+
 # ---------------------------------------------------------------------------
 # DataRouterCheck
 # ---------------------------------------------------------------------------
@@ -99,4 +110,46 @@ async def test_data_router_fails_when_unhealthy():
         result = await check.run()
 
     assert result.passed is False
+    assert "Please check docker logs quant-data-router" in result.todo
+
+
+@pytest.mark.asyncio
+async def test_data_router_fails_on_client_error():
+    """aiohttp.ClientError during request → passed=False."""
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.get = MagicMock(side_effect=aiohttp.ClientError)
+
+    mock_client_session = AsyncMock()
+    mock_client_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("aiohttp.ClientSession", return_value=mock_client_session):
+        check = DataRouterCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert "Data Router unreachable" in result.message
+    assert "Please check docker logs quant-data-router" in result.todo
+
+
+@pytest.mark.asyncio
+async def test_data_router_fails_on_timeout():
+    """asyncio.TimeoutError during request → passed=False."""
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.get = MagicMock(side_effect=asyncio.TimeoutError)
+
+    mock_client_session = AsyncMock()
+    mock_client_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("aiohttp.ClientSession", return_value=mock_client_session):
+        check = DataRouterCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert "Data Router unreachable" in result.message
     assert "Please check docker logs quant-data-router" in result.todo

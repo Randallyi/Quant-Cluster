@@ -17,8 +17,10 @@ class IbkrGatewayCheck(Check):
 
     async def run(self) -> CheckResult:
         try:
-            sock = socket.create_connection(("localhost", 7497), timeout=5)
-            sock.close()
+            sock = await asyncio.to_thread(
+                socket.create_connection, ("localhost", 7497), timeout=5
+            )
+            await asyncio.to_thread(sock.close)
         except OSError:
             return CheckResult(
                 name=self.name,

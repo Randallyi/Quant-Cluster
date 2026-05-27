@@ -1,6 +1,8 @@
 """Tests for WebBridgeCheck."""
+import asyncio
 from unittest.mock import patch, AsyncMock, MagicMock
 
+import aiohttp
 import pytest
 
 from orchestrator.checks.webbridge import WebBridgeCheck
@@ -60,4 +62,46 @@ async def test_webbridge_fails_when_unhealthy():
         result = await check.run()
 
     assert result.passed is False
+    assert "Please start WebBridge: python3 -m webbridge.server" in result.todo
+
+
+@pytest.mark.asyncio
+async def test_webbridge_fails_on_client_error():
+    """aiohttp.ClientError during request → passed=False."""
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.get = MagicMock(side_effect=aiohttp.ClientError)
+
+    mock_client_session = AsyncMock()
+    mock_client_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("aiohttp.ClientSession", return_value=mock_client_session):
+        check = WebBridgeCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert "WebBridge unreachable" in result.message
+    assert "Please start WebBridge: python3 -m webbridge.server" in result.todo
+
+
+@pytest.mark.asyncio
+async def test_webbridge_fails_on_timeout():
+    """asyncio.TimeoutError during request → passed=False."""
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.get = MagicMock(side_effect=asyncio.TimeoutError)
+
+    mock_client_session = AsyncMock()
+    mock_client_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("aiohttp.ClientSession", return_value=mock_client_session):
+        check = WebBridgeCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert "WebBridge unreachable" in result.message
     assert "Please start WebBridge: python3 -m webbridge.server" in result.todo
