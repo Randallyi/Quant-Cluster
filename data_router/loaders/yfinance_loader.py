@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -11,11 +10,8 @@ from models import Bar, FundamentalData
 
 logger = logging.getLogger(__name__)
 
-# Configure yfinance proxy (only affects yfinance, not IBKR or other HTTP clients)
-_yf_proxy = os.getenv("YF_PROXY") or os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
-if _yf_proxy:
-    yf.config.network.data["proxy"] = _yf_proxy
-    logger.info("yfinance proxy configured: %s", _yf_proxy)
+# NOTE: yfinance proxy is configured via HTTP_PROXY/HTTPS_PROXY env vars.
+# yfinance 1.2.0's yf.config.network.data["proxy"] has a bug; use env vars instead.
 
 
 class YFinanceLoader:
