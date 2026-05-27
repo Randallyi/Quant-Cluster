@@ -326,12 +326,18 @@ async def test_pipeline_blocked_when_preflight_fails():
 @pytest.mark.asyncio
 async def test_pipeline_skips_preflight_when_flag_set():
     """Preflight should be skipped when skip_preflight=True."""
+    from unittest.mock import AsyncMock
     from orchestrator.core.orchestrator import InteractiveOrchestrator
 
     with patch("orchestrator.core.orchestrator.PreflightRunner") as MockRunner:
         mock_run_all = MagicMock()
         MockRunner.return_value.run_all = mock_run_all
         orch = InteractiveOrchestrator()
-        result = await orch.run_pipeline(topic="test", skip_preflight=True, dry_run=True)
+        # Mock agent execution so pipeline finishes quickly without real side effects
+        with patch.object(orch, "_execute_agent", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = {"status": "success", "agent": "mock"}
+            result = await orch.run_pipeline(
+                topic="test", skip_preflight=True, dry_run=False, skip_archive=True
+            )
 
     mock_run_all.assert_not_called()
