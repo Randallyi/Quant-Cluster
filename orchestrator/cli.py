@@ -16,17 +16,22 @@ from rich.panel import Panel
 
 from orchestrator.core.orchestrator import InteractiveOrchestrator
 from orchestrator.core.dag import WORKSPACE_ROOT
+from orchestrator.preflight import PreflightRunner
 
 console = Console()
 
 
 async def cmd_health(orch: InteractiveOrchestrator):
-    ok = await orch.health_check_all()
-    sys.exit(0 if ok else 1)
+    runner = PreflightRunner()
+    report = await runner.run_all()
+    report.print_table()
+    if not report.all_passed:
+        console.print("[red]🔴 Preflight failed. Please fix the issues above before running the pipeline.[/red]")
+    sys.exit(0 if report.all_passed else 1)
 
 
-async def cmd_run(orch: InteractiveOrchestrator, topic: str, stream: bool, dry_run: bool, skip_archive: bool = False):
-    result = await orch.run_pipeline(topic=topic, stream=stream, dry_run=dry_run, skip_archive=skip_archive)
+async def cmd_run(orch: InteractiveOrchestrator, topic: str, stream: bool, dry_run: bool, skip_archive: bool = False, skip_preflight: bool = False):
+    result = await orch.run_pipeline(topic=topic, stream=stream, dry_run=dry_run, skip_archive=skip_archive, skip_preflight=skip_preflight)
     console.print_json(json.dumps(result))
     sys.exit(0 if result.get("status") == "success" else 1)
 
@@ -54,6 +59,7 @@ async def main():
     parser.add_argument("--dry-run", action="store_true", help="Don't actually call agents")
     parser.add_argument("--from-stage", default=None, help="Start from this stage (skip earlier stages)")
     parser.add_argument("--skip-archive", action="store_true", help="Skip archive + cleanup after pipeline completion")
+    parser.add_argument("--skip-preflight", action="store_true", help="Skip preflight checks (emergency)")
     args = parser.parse_args()
 
     if args.command == "clear":
@@ -73,7 +79,7 @@ async def main():
                 sys.exit(1)
             orch._skip_stages = set(EXECUTION_ORDER[:EXECUTION_ORDER.index(args.from_stage)])
             console.print(f"[dim]Skipping stages: {orch._skip_stages}[/dim]")
-        await cmd_run(orch, args.topic, args.stream, args.dry_run, args.skip_archive)
+        await cmd_run(orch, args.topic, args.stream, args.dry_run, args.skip_archive, args.skip_preflight)
     elif args.command == "status":
         await cmd_status(orch)
 

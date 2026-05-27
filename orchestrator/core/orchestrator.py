@@ -15,6 +15,7 @@ from orchestrator.core.dag import AGENTS, DAG, EXECUTION_ORDER, AGENT_CONFIG_ROO
 from orchestrator.core.state_db import StateDB
 from orchestrator.clients.hermes import AsyncHermesClient
 from orchestrator.clients.data_router import DataRouterClient
+from orchestrator.preflight import PreflightRunner
 
 # Per-agent timeouts (seconds)
 AGENT_TIMEOUTS = {
@@ -268,7 +269,19 @@ class InteractiveOrchestrator:
         stream: bool = False,
         dry_run: bool = False,
         skip_archive: bool = False,
+        skip_preflight: bool = False,
     ) -> Dict:
+        if not dry_run and not skip_preflight:
+            runner = PreflightRunner()
+            report = await runner.run_all()
+            if not report.all_passed:
+                report.print_table()
+                console.rule("[bold red]🔴 Preflight check failed. Pipeline blocked.")
+                return {
+                    "status": "failed",
+                    "reason": "preflight_failed",
+                    "report": report.to_dict(),
+                }
         run_id = _generate_run_id()
         topic_slug = topic.replace(" ", "_").lower()[:30]
 

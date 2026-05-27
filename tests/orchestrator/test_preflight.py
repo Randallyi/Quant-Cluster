@@ -289,3 +289,49 @@ async def test_cli_launch_mode_outputs_failures():
 
             output = mock_stdout.getvalue()
             assert "🔴 [mock_fail] Fix the mock check." in output
+
+
+@pytest.mark.asyncio
+async def test_pipeline_blocked_when_preflight_fails():
+    """Pipeline should be blocked if preflight report has fatal failures."""
+    from orchestrator.core.orchestrator import InteractiveOrchestrator
+    from orchestrator.preflight import PreflightReport
+    from orchestrator.checks.base import CheckResult
+
+    report = PreflightReport(
+        checks=[
+            CheckResult(
+                name="mock_fail",
+                passed=False,
+                category="external",
+                severity="fatal",
+                message="Mock check failed.",
+                todo="Fix the mock check.",
+            ),
+        ]
+    )
+
+    async def _mock_run_all():
+        return report
+
+    with patch("orchestrator.core.orchestrator.PreflightRunner") as MockRunner:
+        MockRunner.return_value.run_all = _mock_run_all
+        orch = InteractiveOrchestrator()
+        result = await orch.run_pipeline(topic="test", skip_preflight=False)
+
+    assert result["status"] == "failed"
+    assert result["reason"] == "preflight_failed"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_skips_preflight_when_flag_set():
+    """Preflight should be skipped when skip_preflight=True."""
+    from orchestrator.core.orchestrator import InteractiveOrchestrator
+
+    with patch("orchestrator.core.orchestrator.PreflightRunner") as MockRunner:
+        mock_run_all = MagicMock()
+        MockRunner.return_value.run_all = mock_run_all
+        orch = InteractiveOrchestrator()
+        result = await orch.run_pipeline(topic="test", skip_preflight=True, dry_run=True)
+
+    mock_run_all.assert_not_called()
