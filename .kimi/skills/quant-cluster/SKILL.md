@@ -341,6 +341,80 @@ python3 -m orchestrator.cli run --topic "相同主题" --from-stage {下一个st
 - **risk_auditor 严格标准**：PBO < 0.50、参数稳定性 CV < 1.0、排列检验 p < 0.05
 - **strategy_writer 诚实**：NO-GO 时写失败分析而非强行包装，附改进建议和重新审计清单
 
+## Memory 管理（Pipeline 完成后执行）
+
+每次 pipeline 成功完成后，提取关键发现写入长期记忆，供后续 run 自动 recall。
+
+### 提取流程
+
+1. 定位最新 archive：
+   ```bash
+   ls -t shared_workspace/archive/ | head -1
+   ```
+
+2. **优先读取 run_card.json**（结构化数据）：
+   ```bash
+   cat shared_workspace/archive/{run_id}/03_backtest/run_card.json
+   ```
+   关注字段：`metrics`（Sharpe、最大回撤等）、`backtest.engine`、`data_sources`、`warnings`。
+
+3. **补充阅读定性报告**：
+   - `01_hypothesis/hypothesis_*.md` → 核心假设
+   - `04_risk/go_no_go_verdict.md` → 审计结论
+   - `05_strategy/trading_sop_*.md` 或 `strategy_failure_analysis.md` → 最终结果
+
+4. 生成 memory content（浓缩洞察，非全量报告）：
+   ```markdown
+   ## 核心假设
+   - ...
+
+   ## 关键发现
+   - GO/NO-GO 结论 + 核心指标（来自 run_card）
+   - ...
+
+   ## 失败教训
+   - ...（如有 warnings 或 NO-GO）
+
+   ## 工具备注
+   - backtest_engine: ...
+   - data_source: ...
+   - run_card_config_hash: ...
+   ```
+
+5. 写入记忆：
+   ```bash
+   python3 -m memory add \
+       --name "{topic_slug}" \
+       --content "$(cat memory_content.md)" \
+       --type project \
+       --description "一句话摘要（包含核心指标）"
+   ```
+
+6. 验证：
+   ```bash
+   python3 -m memory search "{topic_keyword}"
+   ```
+
+### 查询历史记忆
+
+```bash
+# 关键词搜索
+python3 -m memory search "动量" --max-results 5
+
+# 列出全部
+python3 -m memory list
+
+# 查看单条
+python3 -m memory show "动量与反转的边界条件"
+```
+
+### 注意事项
+
+- Memory 存储在 `~/.quant-cluster/memory/`（用户级），跨项目共享
+- 同名主题会**覆盖更新**，不会生成重复文件
+- description 字段用于检索评分（metadata 权重 2.0），务必写清楚核心结论
+- CJK 搜索按字符级匹配，写关键词时无需考虑分词
+
 ## 全局约束
 
 1. **永远不要手动删除 `shared_workspace/archive/` 中的内容** — 这是唯一的历史产物备份
