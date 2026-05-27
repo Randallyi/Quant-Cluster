@@ -57,14 +57,19 @@ for port in 8642 8643 8644 8645 8646; do
     echo "  ✅ 端口 $port 就绪"
 done
 
-# 5. 安装编排器依赖
+# 6. 安装编排器依赖
 echo "🐍 安装编排层依赖..."
 cd orchestrator
 pip install -r requirements.txt -q
 
-# 6. 健康检查
-echo "🔍 运行健康检查..."
-python3 -m orchestrator.cli health
+# 7. Preflight 前置检查
+echo "🔍 运行 Preflight 前置检查..."
+if ! python3 -m orchestrator.preflight --mode=launch; then
+    echo ""
+    echo "❌ Preflight 未通过，集群启动已阻止"
+    echo "   请修复上述问题后重新运行 ./launch.sh"
+    exit 1
+fi
 
 echo ""
 echo "═══════════════════════════════════════════════════════"
