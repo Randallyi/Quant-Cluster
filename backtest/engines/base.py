@@ -342,7 +342,7 @@ class BaseEngine(ABC):
             bench_result = resolve_benchmark(
                 ticker=bench_ticker,
                 data_router_url=config.get("data_router_url", ""),
-                data_source_path=config.get("data", {}).get("feature_matrix", ""),
+                data_source_path=config.get("feature_matrix_path", ""),
                 start_date=config.get("start_date", ""),
                 end_date=config.get("end_date", ""),
             )

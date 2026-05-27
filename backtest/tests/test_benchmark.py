@@ -1,6 +1,8 @@
 import pytest
 import pandas as pd
 import numpy as np
+import tempfile
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 from backtest.engines.benchmark import resolve_benchmark, _build_result
 
@@ -51,3 +53,35 @@ def test_build_result():
     assert result.ticker == "SPY"
     assert result.source == "ibkr"
     assert result.total_ret > 0
+
+
+def test_resolve_benchmark_uses_local_file():
+    """IBKR and yfinance fail → local file used."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        df = pd.DataFrame({
+            "open": [100], "high": [101], "low": [99], "close": [100], "volume": [1000]
+        }, index=pd.to_datetime(["2024-01-01"]))
+        df.to_csv(tmp_path / "SPY.csv")
+
+        with patch("backtest.engines.benchmark._fetch_from_ibkr", return_value=pd.DataFrame()):
+            with patch("backtest.engines.benchmark._fetch_from_yfinance", return_value=pd.DataFrame()):
+                result = resolve_benchmark(
+                    "SPY",
+                    data_router_url="http://test:8080",
+                    data_source_path=str(tmp_path),
+                )
+                assert result is not None
+                assert result.source == "local"
+
+
+def test_fetch_from_local_handles_errors():
+    """Corrupt file should return empty DataFrame, not crash."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        # Create a corrupt file
+        (tmp_path / "BAD.csv").write_text("not,a,valid,csv")
+
+        from backtest.engines.benchmark import _fetch_from_local
+        df = _fetch_from_local("BAD", str(tmp_path))
+        assert df.empty
