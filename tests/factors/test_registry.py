@@ -17,7 +17,7 @@ class TestListFactors:
         assert all(f["category"] == "academic" for f in factors_list)
 
     def test_list_factors_empty_category(self):
-        factors_list = list_factors(category="alpha101")
+        factors_list = list_factors(category="nonexistent")
         assert factors_list == []
 
 
