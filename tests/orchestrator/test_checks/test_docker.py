@@ -64,3 +64,57 @@ async def test_docker_attempts_restart_on_missing():
     assert result.passed is True
     assert result.fix_attempted is True
     assert result.fix_success is True
+
+
+@pytest.mark.asyncio
+async def test_docker_fails_when_docker_not_installed():
+    """Docker binary missing → passed=False, fix attempted but fails."""
+    with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError):
+        check = DockerContainersCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert result.fix_attempted is True
+    assert result.fix_success is False
+
+
+@pytest.mark.asyncio
+async def test_docker_fails_when_docker_ps_returns_error():
+    """docker ps exits with error → passed=False."""
+    ps_proc = AsyncMock()
+    ps_proc.communicate.return_value = (b"", b"error")
+    ps_proc.returncode = 1
+
+    compose_proc = AsyncMock()
+    compose_proc.communicate.return_value = (b"", b"")
+    compose_proc.returncode = 0
+
+    side_effects = [ps_proc, compose_proc, ps_proc]
+
+    with patch("asyncio.create_subprocess_exec", side_effect=side_effects):
+        check = DockerContainersCheck()
+        result = await check.run()
+
+    assert result.passed is False
+
+
+@pytest.mark.asyncio
+async def test_docker_fails_when_compose_up_fails():
+    """Missing containers and docker compose up -d fails → passed=False."""
+    ps_proc = AsyncMock()
+    ps_proc.communicate.return_value = (b"", b"")
+    ps_proc.returncode = 0
+
+    compose_proc = AsyncMock()
+    compose_proc.communicate.return_value = (b"", b"error")
+    compose_proc.returncode = 1
+
+    side_effects = [ps_proc, compose_proc]
+
+    with patch("asyncio.create_subprocess_exec", side_effect=side_effects):
+        check = DockerContainersCheck()
+        result = await check.run()
+
+    assert result.passed is False
+    assert result.fix_attempted is True
+    assert result.fix_success is False

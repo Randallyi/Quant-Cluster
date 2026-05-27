@@ -23,22 +23,30 @@ class DockerContainersCheck(Check):
 
     async def _get_running_containers(self) -> Set[str]:
         """Return set of currently running container names."""
-        proc = await asyncio.create_subprocess_exec(
-            "docker", "ps", "--format", "{{.Names}}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "ps", "--format", "{{.Names}}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except (FileNotFoundError, PermissionError):
+            return set()
         stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            return set()
         names = stdout.decode().strip().splitlines()
         return set(names)
 
     async def _start_missing(self, missing: List[str]) -> bool:
         """Attempt to start missing containers via docker compose."""
-        proc = await asyncio.create_subprocess_exec(
-            "docker", "compose", "up", "-d", *missing,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "compose", "up", "-d", *missing,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except (FileNotFoundError, PermissionError):
+            return False
         await proc.communicate()
         return proc.returncode == 0
 
