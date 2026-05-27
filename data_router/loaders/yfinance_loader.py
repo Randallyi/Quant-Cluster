@@ -15,6 +15,18 @@ class YFinanceLoader:
     """Data loader backed by yfinance."""
 
     name = "yfinance"
+    _MIN_INTERVAL_SECONDS = 1.0
+    _last_request_time: float = 0.0
+
+    def _throttle(self):
+        """Ensure minimum interval between yfinance API calls to avoid rate limiting."""
+        now = time.time()
+        elapsed = now - self._last_request_time
+        if elapsed < self._MIN_INTERVAL_SECONDS:
+            sleep_time = self._MIN_INTERVAL_SECONDS - elapsed
+            logger.debug("Throttling yfinance request for %.2fs", sleep_time)
+            time.sleep(sleep_time)
+        self._last_request_time = time.time()
 
     def fetch_historical(
         self,
@@ -24,6 +36,7 @@ class YFinanceLoader:
         interval: str = "1d",
         auto_adjust: bool = True,
     ) -> List[Bar]:
+        self._throttle()
         """Fetch historical bars for a ticker.
 
         Args:
@@ -81,6 +94,7 @@ class YFinanceLoader:
         return bars
 
     def fetch_fundamental(self, ticker: str) -> Optional[FundamentalData]:
+        self._throttle()
         """Fetch fundamental data for a ticker.
 
         Args:

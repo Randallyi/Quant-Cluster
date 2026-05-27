@@ -7,6 +7,7 @@ from fastapi import APIRouter
 
 from cache.manager import CacheManager
 from ibkr.client import IBKRClient
+from ibkr.connection_pool import ClientIdPool
 from loaders.akshare_loader import AKShareLoader
 from loaders.yfinance_loader import YFinanceLoader
 from models import DataResponse, SourceHealth
@@ -20,7 +21,7 @@ _yf_loader = YFinanceLoader()
 
 
 def _get_ibkr_client() -> Optional[IBKRClient]:
-    """Lazy init IBKR client for health checks."""
+    """Lazy init IBKR client for health checks (clientId 110 to avoid conflict with main app)."""
     global _ibkr_client
     if _ibkr_client is None:
         import os
@@ -28,6 +29,9 @@ def _get_ibkr_client() -> Optional[IBKRClient]:
         host = os.getenv("TWS_HOST", "host.docker.internal")
         port = int(os.getenv("TWS_PORT", "7497"))
         _ibkr_client = IBKRClient(host=host, port=port)
+        _ibkr_client._main_client_id = 110
+        _ibkr_client.pool = ClientIdPool(start=110, end=119)
+        _ibkr_client.connect()
     return _ibkr_client
 
 
