@@ -335,11 +335,24 @@ class BaseEngine(ABC):
         benchmark_metadata = {}
 
         # ── External benchmark fetch ──────────────────────────────────────────
+        from backtest.engines.benchmark import resolve_benchmark
+
         bench_ticker = config.get("benchmark")
         if bench_ticker and bench_ticker != "auto":
-            # TODO: implement local benchmark reading in Task 7
-            # For now, keep the fallback bench_ret computed above
-            pass
+            bench_result = resolve_benchmark(
+                ticker=bench_ticker,
+                data_router_url=config.get("data_router_url", ""),
+                data_source_path=config.get("data", {}).get("feature_matrix", ""),
+                start_date=config.get("start_date", ""),
+                end_date=config.get("end_date", ""),
+            )
+            if bench_result is not None:
+                bench_ret = bench_result.ret_series.reindex(dates).fillna(0.0)
+                benchmark_metadata = {
+                    "benchmark_ticker": bench_result.ticker,
+                    "benchmark_return": bench_result.total_ret,
+                    "benchmark_source": bench_result.source,
+                }
         # ── External benchmark fetch ──────────────────────────────────────────
 
         bench_equity = self.initial_capital * (1 + bench_ret).cumprod()
