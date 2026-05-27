@@ -3,7 +3,6 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict
 
 from rich.console import Console
 from rich.table import Table
@@ -14,14 +13,14 @@ from orchestrator.checks.base import CheckResult
 
 @dataclass
 class PreflightReport:
-    checks: List[CheckResult] = field(default_factory=list)
+    checks: list[CheckResult] = field(default_factory=list)
 
     @property
     def all_passed(self) -> bool:
         return all(c.passed or c.severity == "warning" for c in self.checks)
 
     @property
-    def fatal_failed(self) -> List[CheckResult]:
+    def fatal_failed(self) -> list[CheckResult]:
         return [c for c in self.checks if not c.passed and c.severity == "fatal"]
 
     def print_table(self) -> None:
@@ -64,7 +63,7 @@ class PreflightReport:
                 console.print(f"  {i}. [{c.name}] {c.todo}")
             console.print()
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "passed": self.all_passed,
             "fatal_count": len(self.fatal_failed),
@@ -78,22 +77,54 @@ class PreflightRunner:
         all_classes = list(CHECK_REGISTRY.values())
 
         # Phase 1: auto-fixable checks
-        fixable = [c for c in all_classes if c().auto_fixable]
+        fixable = [c for c in all_classes if c.auto_fixable]
         for check_cls in fixable:
-            result = await check_cls().run()
+            try:
+                result = await check_cls().run()
+            except Exception as exc:
+                result = CheckResult(
+                    name=check_cls.name,
+                    passed=False,
+                    category=check_cls.category,
+                    severity=check_cls.severity,
+                    message=f"Check crashed: {exc}",
+                    todo=f"Please investigate {check_cls.name} check",
+                )
             report.checks.append(result)
 
         # Phase 2: re-verify anything that was fixed
         for i, result in enumerate(list(report.checks)):
             if result.fix_attempted:
-                check_cls = next(c for c in fixable if c().name == result.name)
-                retry = await check_cls().run()
+                check_cls = CHECK_REGISTRY.get(result.name)
+                if check_cls is None:
+                    continue
+                try:
+                    retry = await check_cls().run()
+                except Exception as exc:
+                    retry = CheckResult(
+                        name=check_cls.name,
+                        passed=False,
+                        category=check_cls.category,
+                        severity=check_cls.severity,
+                        message=f"Check crashed: {exc}",
+                        todo=f"Please investigate {check_cls.name} check",
+                    )
                 report.checks[i] = retry
 
         # Phase 3: non-fixable checks
-        non_fixable = [c for c in all_classes if not c().auto_fixable]
+        non_fixable = [c for c in all_classes if not c.auto_fixable]
         for check_cls in non_fixable:
-            result = await check_cls().run()
+            try:
+                result = await check_cls().run()
+            except Exception as exc:
+                result = CheckResult(
+                    name=check_cls.name,
+                    passed=False,
+                    category=check_cls.category,
+                    severity=check_cls.severity,
+                    message=f"Check crashed: {exc}",
+                    todo=f"Please investigate {check_cls.name} check",
+                )
             report.checks.append(result)
 
         return report
