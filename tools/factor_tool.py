@@ -15,7 +15,7 @@ import numpy as np
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from factors.registry import list_factors, compute
+from factors.registry import list_factors, compute, _derive_fields
 from factors.bench_runner import evaluate
 
 
@@ -135,7 +135,7 @@ def _action_bench(args: argparse.Namespace) -> int:
         raise FactorToolError(error_type="CONFIG_INVALID", message="--out-dir is required for bench", suggestion="Provide --out-dir path", retryable=True)
 
     df = _load_panel(args.data)
-    data = _extract_fields(df)
+    data = _derive_fields(_extract_fields(df))
 
     factors_list = list_factors()
     factor_names = [f["name"] for f in factors_list]
@@ -205,7 +205,7 @@ def _action_bench_category(args: argparse.Namespace) -> int:
         raise FactorToolError(error_type="CONFIG_INVALID", message="--out-dir is required for bench_category", suggestion="Provide --out-dir path", retryable=True)
 
     df = _load_panel(args.data)
-    data = _extract_fields(df)
+    data = _derive_fields(_extract_fields(df))
     close = data.get("close")
     if close is None:
         raise FactorToolError(error_type="DATA_NOT_FOUND", message="close field required for forward returns", suggestion="Ensure data has close field", retryable=True)

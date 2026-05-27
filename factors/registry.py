@@ -57,6 +57,9 @@ def compute(factor_name: str, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
             f"Available: {available}"
         )
 
+    # Inject derived fields before checking missing inputs
+    data = _derive_fields(data)
+
     missing = set(meta.inputs) - set(data.keys())
     if missing:
         raise ValueError(
@@ -66,3 +69,15 @@ def compute(factor_name: str, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     kwargs = {inp: data[inp] for inp in meta.inputs}
     return meta.compute_fn(**kwargs)
+
+
+def _derive_fields(data: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    """Inject derived fields that alphas may expect but are not in raw OHLCV.
+
+    Currently supports:
+    - amount = close * volume (A-share turnover; used by gtja191)
+    """
+    derived = dict(data)
+    if "amount" not in derived and "close" in derived and "volume" in derived:
+        derived["amount"] = derived["close"] * derived["volume"]
+    return derived

@@ -227,8 +227,12 @@ def safe_div(a: pd.DataFrame, b: pd.DataFrame, eps: float = 1e-12) -> pd.DataFra
     return result.replace([np.inf, -np.inf], np.nan)
 
 
-def vwap(panel: dict[str, pd.DataFrame]) -> pd.DataFrame:
+def vwap(panel: dict[str, pd.DataFrame], market=None) -> pd.DataFrame:
     """Typical price VWAP: (open + high + low + close) / 4.
+
+    ``market`` is accepted for compatibility with Vibe-Trading alphas
+    that pass a market identifier, but is ignored (all markets use
+    the same typical-price formula here).
 
     Any missing required column → KeyError; never silent zero.
     """
