@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 import json
+import re
 
 
 @dataclass
@@ -12,7 +13,7 @@ class PaperMeta:
     source_id: str
     doi: Optional[str] = None
     title: str = ""
-    authors: List[str] = None
+    authors: Optional[List[str]] = None
     abstract: Optional[str] = None
     published_at: Optional[datetime] = None
     year: Optional[int] = None
@@ -21,9 +22,10 @@ class PaperMeta:
 
     def unique_key(self) -> str:
         """去重标识：有 DOI 用 DOI，否则用 source + source_id"""
-        return self.doi.lower() if self.doi else f"{self.source}:{self.source_id}"
+        doi = self.doi.strip() if self.doi else None
+        return doi.lower() if doi else f"{self.source}:{self.source_id}"
 
     def suggested_filename(self) -> str:
         """建议的文件名：{source}_{safe_id}.pdf"""
-        safe_id = str(self.source_id).replace("/", "_").replace(":", "_")
+        safe_id = re.sub(r'[\\/:*?"<>|\x00]', "_", str(self.source_id))
         return f"{self.source}_{safe_id}.pdf"
