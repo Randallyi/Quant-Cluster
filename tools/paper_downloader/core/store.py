@@ -1,6 +1,6 @@
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from pathlib import Path
 
@@ -97,14 +97,14 @@ class PaperStore:
         ).fetchall()
         return [self._row_to_meta(row) for row in rows]
 
-    def mark_downloaded(self, paper_id: int, filepath: str) -> None:
+    def mark_downloaded(self, paper_id: int, filepath) -> None:
         self.conn.execute(
             """
             UPDATE papers
             SET status = 'downloaded', downloaded_at = datetime('now'), filepath = ?
             WHERE id = ?
             """,
-            (filepath, paper_id),
+            (str(filepath), paper_id),
         )
         self.conn.commit()
 
@@ -121,13 +121,49 @@ class PaperStore:
         )
         self.conn.commit()
 
+    def mark_catalogued(self, paper_id: int, reason: str = "catalogued") -> None:
+        """Mark a paper as catalogued (recorded but not auto-downloaded).
+        
+        Different from skipped/failed — the paper is intentionally not downloaded
+        based on filtering criteria, but kept in the DB for agent review.
+        """
+        self.conn.execute(
+            """
+            UPDATE papers
+            SET status = 'skipped', last_fail_reason = ?
+            WHERE id = ?
+            """,
+            (f"catalogued: {reason}", paper_id),
+        )
+        self.conn.commit()
+
+    def bulk_catalogue(self, paper_ids: List[int], reason: str = "catalogued") -> int:
+        """Bulk mark papers as catalogued. Much faster than calling mark_catalogue
+        in a loop because it uses a single transaction."""
+        if not paper_ids:
+            return 0
+        placeholders = ",".join("?" * len(paper_ids))
+        self.conn.execute(
+            f"""
+            UPDATE papers
+            SET status = 'skipped', last_fail_reason = ?
+            WHERE id IN ({placeholders})
+            """,
+            (f"catalogued: {reason}",) + tuple(paper_ids),
+        )
+        self.conn.commit()
+        return len(paper_ids)
+
     def get_latest_published_at(self, source: str) -> Optional[datetime]:
         row = self.conn.execute(
             "SELECT MAX(published_at) as max_published FROM papers WHERE source = ?",
             (source,),
         ).fetchone()
         if row and row["max_published"]:
-            return datetime.fromisoformat(row["max_published"])
+            dt = datetime.fromisoformat(row["max_published"])
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
         return None
 
     def _row_to_meta(self, row: sqlite3.Row) -> PaperMeta:

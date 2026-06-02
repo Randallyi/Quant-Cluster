@@ -1,0 +1,88 @@
+storage:
+  raw_dir: "/workspace/papers/raw"
+  db_path: "/workspace/papers/downloads.db"
+
+backfill:
+  journals_since: "2010-01-01"
+  conferences_since: "2020-01-01"
+
+api_keys:
+  core_ac: "${CORE_API_KEY}"
+  elsevier: "${ELSEVIER_API_KEY}"
+  wiley_tdm: "${WILEY_TDM_TOKEN}"
+
+sources:
+  arxiv_qfin:
+    enabled: true
+    frequency: weekly
+    categories: ["q-fin.TR", "q-fin.PM", "q-fin.MF", "q-fin.CP", "q-fin.ST"]
+    rate_limit_delay: 3.0
+    backfill:
+      enabled: true
+      mode: gcs
+      gcs_bucket: arxiv-dataset
+      year_from: 2010
+      year_to: 2024
+      rate_limit_delay: 0.1
+
+  arxiv_cslg:
+    enabled: true
+    frequency: weekly
+    categories: ["cs.LG", "cs.AI"]
+    rate_limit_delay: 3.0
+    backfill:
+      enabled: true
+      mode: gcs
+      gcs_bucket: arxiv-dataset
+      year_from: 2010
+      year_to: 2024
+      rate_limit_delay: 0.1
+
+  core_ac:
+    enabled: true
+    frequency: monthly
+    queries:
+      # Review of Finance + quant keywords (not covered by Elsevier/Wiley)
+      - 'journals.title:"Review of Finance" AND (machine learning OR algorithmic trading OR quantitative strategy OR portfolio optimization OR factor model)'
+      # Dedicated quant/practice journals (not covered by Elsevier/Wiley)
+      - 'journals.title:"Journal of Financial and Quantitative Analysis" OR journals.title:"Journal of Portfolio Management" OR journals.title:"Financial Analysts Journal"'
+    year_from: 2020
+    rate_limit_delay: 6.0
+
+  elsevier:
+    enabled: true
+    frequency: monthly
+    journals: ["Journal of Financial Economics", "Journal of Banking & Finance", "Journal of Empirical Finance"]
+    year_from: 2010
+    rate_limit_delay: 0.5
+
+  wiley:
+    enabled: true
+    frequency: monthly
+    # Use exact CrossRef container-title names
+    journals: ["The Journal of Finance"]
+    crossref_filter: "publisher-name:Wiley,license.url:http://creativecommons.org/licenses/by"
+    year_from: 2010
+    rate_limit_delay: 0.35
+
+  neurips:
+    enabled: true
+    frequency: yearly
+    rate_limit_delay: 2.0
+
+  aistats:
+    enabled: true
+    frequency: yearly
+    year: 2025
+    volume: 258
+    rate_limit_delay: 1.0
+
+  ssrn: {enabled: false, frequency: weekly, rate_limit_delay: 5.0}
+  icml: {enabled: false, frequency: yearly}
+  iclr: {enabled: false, frequency: yearly}
+  kdd: {enabled: false, frequency: yearly}
+  icaif: {enabled: false, frequency: yearly}
+  aqr: {enabled: false, frequency: monthly}
+  oxford_man: {enabled: false, frequency: monthly}
+  alpha_architect: {enabled: false, frequency: monthly}
+  scihub: {enabled: false, frequency: on_demand}

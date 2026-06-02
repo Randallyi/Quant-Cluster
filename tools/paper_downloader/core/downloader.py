@@ -39,12 +39,20 @@ def download_file(
 
     attempt = 0
     while True:
-        response = requests.get(
-            url,
-            headers=headers,
-            stream=True,
-            timeout=timeout,
-        )
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                stream=True,
+                timeout=timeout,
+            )
+        except requests.exceptions.RequestException as exc:
+            # Catch connection errors, SSL errors, timeouts, etc.
+            if attempt >= max_retries:
+                raise DownloadError(f"Network error after {max_retries} retries: {url} — {exc}")
+            time.sleep(rate_limit_delay * (2 ** attempt))
+            attempt += 1
+            continue
 
         # HTTP status handling
         if response.status_code == 403:
