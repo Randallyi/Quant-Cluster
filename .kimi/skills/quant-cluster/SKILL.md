@@ -1,7 +1,7 @@
 ---
 name: quant-cluster
 description: |
-  Quant Cluster — 量化策略研究自动化流水线。5 个 Hermes AI Agent 协作完成从假设生成到策略撰写的全链路量化研究。
+  Quant Cluster — 量化策略研究自动化流水线。6 个 Hermes AI Agent 协作完成从假设生成到策略撰写、论文下载的全链路量化研究。
   当用户提到跑 pipeline、跑量化研究、quant cluster、启动 agent、研究某个策略主题、跑回测、跑假设、跑数据工程等任何与 quant-cluster 项目相关的操作时触发此 skill。
 ---
 
@@ -10,7 +10,7 @@ description: |
 ## 项目架构
 
 ```
-Data Router (port 8888)          5 Hermes Agents (port 8642-8646)
+Data Router (port 8888)          6 Hermes Agents (port 8642-8647)
     ↓                                    ↓
 IB Gateway (port 7497)  ←──  REST API  ←──  各 Agent 通过 data-router 获取数据
 ```
@@ -22,6 +22,7 @@ IB Gateway (port 7497)  ←──  REST API  ←──  各 Agent 通过 data-ro
 | quant_analyst | 8644 | 回测建模 + 绩效分析 | `03_backtest/` |
 | risk_auditor | 8645 | 过拟合检验 + GO/NO-GO | `04_risk/` |
 | strategy_writer | 8646 | 交易 SOP + 知识沉淀 | `05_strategy/` |
+| paper_manager | 8647 | 论文下载引擎调度 + WebBridge 源下载 | `papers/` |
 
 ## 前置检查（每次执行必做）
 
@@ -32,7 +33,7 @@ cd /Users/yihaoyang/VScode\ workspace/quant-cluster
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
-**期望看到 6 个容器**：`quant-data-router` + `hermes-hypothesis` + `hermes-data` + `hermes-quant` + `hermes-risk` + `hermes-writer`
+**期望看到 7 个容器**：`quant-data-router` + `hermes-hypothesis` + `hermes-data` + `hermes-quant` + `hermes-risk` + `hermes-writer` + `hermes-paper-manager`
 
 - **容器不全** → 执行启动命令
 - **全部在线** → 继续执行用户请求
@@ -115,6 +116,44 @@ python3 -m orchestrator.cli run --topic "xxx" --skip-archive
 python3 -m orchestrator.cli run --topic "xxx" --stream
 ```
 
+## Paper Manager 操作（论文下载）
+
+Paper Manager 负责两部分工作：
+- **Engine 源**（API/HTTP）：arXiv, CORE, Elsevier, Wiley, NeurIPS, AISTATS — 由 Engine 批量处理
+- **WebBridge 源**（浏览器）：SSRN, AQR, Oxford-Man 等 — 由 Agent 通过 WebBridge 逐个处理
+
+两者共享 `shared_workspace/papers/downloads.db` 和 `shared_workspace/papers/raw/`。
+
+### 检查论文下载状态
+```bash
+cd /workspace/tools/paper_downloader
+PYTHONPATH=/workspace/tools/paper_downloader /opt/hermes/.venv/bin/python3 __main__.py stats
+```
+
+### 运行 Engine 源扫描
+```bash
+cd /workspace/tools/paper_downloader
+PYTHONPATH=/workspace/tools/paper_downloader /opt/hermes/.venv/bin/python3 __main__.py scan --layer api --report
+```
+
+### 触发 Paper Manager Agent（WebBridge 源 + 报告）
+> **注意**：Paper Manager 是**独立服务**，不加入 Pipeline DAG。不通过 `orchestrator.cli run` 触发。
+
+直接通过 API 发送任务给 Paper Manager Agent（port 8647）。Agent 会读取 `paper-downloading` skill（路径：`/opt/data/skills/paper-downloading/`），根据 reference 文档执行 WebBridge 下载。详细命令参考 `references/webbridge-ssrn.md`。
+
+**关键约束：**
+- Engine 命令必须用 `/opt/hermes/.venv/bin/python3`，不能直接用系统 Python
+- `PYTHONPATH` 必须包含 `/workspace/tools/paper_downloader`
+- WebBridge 源使用 `/workspace/tools/webbridge_client.py`（完整版，有 `download` 命令）
+- 每篇论文间隔 ≥5 秒
+
+### Paper Manager 产物
+- `shared_workspace/papers/raw/{source}/` — 原始 PDF
+- `shared_workspace/papers/downloads.db` — SQLite 元数据库
+- `shared_workspace/papers/paper_manager_report_{date}.md` — 中文报告
+- `shared_workspace/papers/paper_manager_report_{date}_en.md` — 英文报告
+- `shared_workspace/papers/.agent_checkpoint.json` — 完成标记
+
 ## Pipeline 产物
 
 Pipeline 完成后自动：
@@ -152,15 +191,25 @@ export $(grep -v '^#' .env | xargs)
 
 WebBridge 客户端脚本位于 `tools/webbridge_client.py`，通过 Docker volume 挂载到所有 Hermes 容器的 `/workspace/tools/webbridge_client.py`。
 
-Agent SOUL.md 中调用方式：
+**用途**：
+- **hypothesis Agent**：网页搜索、文献浏览
+- **paper_manager Agent**：SSRN 等需要浏览器的论文源下载
+
+Agent 调用方式：
 ```bash
+# 获取页面内容
 python3 /workspace/tools/webbridge_client.py fetch --url "<URL>" --session <SESSION>
+
+# 下载文件（返回 base64，用于 SSRN PDF 下载）
+python3 /workspace/tools/webbridge_client.py download --url "<URL>" --session <SESSION>
 ```
 
-**已知问题**：旧版脚本硬编码端口 `8765`，正确端口为 `10086`（由 `WEBBRIDGE_PORT` 环境变量控制）。如遇连接失败，先检查 WebBridge 端口：
-```bash
-lsof -i :10086   # 应显示 kimi-webbridge 进程
-```
+**已知问题**：
+1. 旧版脚本硬编码端口 `8765`，正确端口为 `10086`（由 `WEBBRIDGE_PORT` 环境变量控制）。如遇连接失败，先检查 WebBridge 端口：
+   ```bash
+   lsof -i :10086   # 应显示 kimi-webbridge 进程
+   ```
+2. `/workspace/webbridge_client.py`（shared_workspace 根目录拷贝）缺少 `download`/`save_pdf` 命令。必须使用 `/workspace/tools/webbridge_client.py`。
 
 ## 故障排除
 
@@ -240,11 +289,14 @@ python3 -m orchestrator.cli run --topic "相同主题" --from-stage {失败的st
 | Agent DAG | `orchestrator/core/dag.py` | Agent 注册、依赖、输出文件 |
 | HTML Reporter | `orchestrator/core/html_reporter.py` | 报告生成器 |
 | Data Router | `data_router/` | IB Gateway REST 网关 |
+| 论文下载引擎 | `tools/paper_downloader/` | Engine：API/HTTP 源批量下载 |
+| 论文下载 Skill | `agent_configs/paper_manager/skills/paper-downloading/` | Agent skill：含 WebBridge 策略 reference |
 | Agent 配置 | `agent_configs/{agent}/SOUL.md` | 每个 Agent 的指令 |
 | Agent 配置 | `agent_configs/{agent}/config.yaml` | Hermes 运行时配置 |
 | 产物目录 | `shared_workspace/` | 当前 run 的工作区 |
+| 论文池 | `shared_workspace/papers/` | Paper Manager 工作区（PDF + DB） |
 | 归档目录 | `shared_workspace/archive/` | 历史 run 的归档 |
-| Docker 编排 | `docker-compose.yml` | 8 个服务定义 |
+| Docker 编排 | `docker-compose.yml` | 8+ 个服务定义 |
 
 ## 可复现性：为什么上次能跑通、这次不行？
 
