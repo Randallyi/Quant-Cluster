@@ -49,7 +49,7 @@ echo "  ✅ Data Router 已连接 IB Gateway"
 # 6. 等待 Hermes 实例就绪
 echo "⏳ 等待 Hermes 实例启动（约 30 秒）..."
 sleep 10
-for port in 8642 8643 8644 8645 8646; do
+for port in 8642 8643 8644 8645 8646 8647; do
     until curl -s http://localhost:$port/health > /dev/null 2>&1; do
         echo "  等待端口 $port..."
         sleep 3

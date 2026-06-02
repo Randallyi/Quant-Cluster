@@ -7,6 +7,7 @@ AGENTS = {
     "quant_analyst":  {"port": 8644, "api_key": "sk-quant-local",      "workspace": "03_backtest"},
     "risk_auditor":   {"port": 8645, "api_key": "sk-risk-local",       "workspace": "04_risk"},
     "strategy_writer":{"port": 8646, "api_key": "sk-writer-local",     "workspace": "05_strategy"},
+    "paper_manager": {"port": 8647, "api_key": "sk-downloader-local", "workspace": "papers"},
 }
 
 DAG = {

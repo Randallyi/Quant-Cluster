@@ -156,6 +156,35 @@ services:
     command: ["hermes", "gateway", "run", "--accept-hooks"]
     restart: unless-stopped
 
+  hermes-paper-manager:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-paper-manager
+    ports:
+      - "8647:8642"
+    volumes:
+      - ./agent_configs/paper_manager:/opt/data
+      - ./shared_workspace:/workspace
+      - ./tools:/workspace/tools
+    environment:
+      - HERMES_AUTH_TOKEN=change-me-paper
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=sk-downloader-local
+      - ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CORE_API_KEY=${CORE_API_KEY}
+      - ELSEVIER_API_KEY=${ELSEVIER_API_KEY}
+      - WILEY_TDM_TOKEN=${WILEY_TDM_TOKEN}
+      - WEBBRIDGE_HOST=host.docker.internal
+      - WEBBRIDGE_PORT=10086
+      - PORT=8642
+      - HERMES_PROFILE=paper_manager
+      - HERMES_YOLO_MODE=1
+    depends_on:
+      - data-router
+    command: ["hermes", "gateway", "run", "--accept-hooks"]
+    restart: unless-stopped
+
   # ── 可选：Redis 用于编排层状态 ──────────────────────────
   redis:
     image: redis:7-alpine
