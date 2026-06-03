@@ -1,7 +1,7 @@
 import re
 import statistics
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional, Union
 
 import fitz
 
@@ -229,3 +229,115 @@ def contains_keywords(blocks: List[Dict], keywords: List[str], threshold: int = 
         for kw in keywords:
             total += text.count(kw.lower())
     return total >= threshold
+
+
+def generate_doc_id(pdf_path: Path) -> str:
+    """Return the filename stem as doc_id."""
+    return Path(pdf_path).stem
+
+
+def extract_all_captions(sections: Dict, caption_type: str) -> List[Dict]:
+    """Find sections whose name contains caption_type and collect all blocks' text."""
+    captions: List[Dict] = []
+    for section_name, blocks in sections.items():
+        if caption_type.lower() in section_name.lower():
+            text = "\n".join(b["text"] for b in blocks)
+            if text:
+                page_num = blocks[0]["page_num"] if blocks else 0
+                captions.append({"text": text, "page_num": page_num})
+    return captions
+
+
+def grep_keywords_in_sections(sections: Dict, keywords: List[str]) -> List[Dict]:
+    """Search for paragraphs containing any keyword across all sections."""
+    matches: List[Dict] = []
+    for section_name, blocks in sections.items():
+        for block in blocks:
+            text = block.get("text", "")
+            for keyword in keywords:
+                if keyword.lower() in text.lower():
+                    matches.append({
+                        "text": text,
+                        "keyword": keyword,
+                        "section": section_name,
+                        "page_num": block.get("page_num", 0),
+                    })
+                    break
+    return matches
+
+
+def find_sections(sections: Dict, keywords: List[str]) -> Dict[str, List[Dict]]:
+    """Find sections whose name contains any of the keywords."""
+    result: Dict[str, List[Dict]] = {}
+    for section_name, blocks in sections.items():
+        for keyword in keywords:
+            if keyword.lower() in section_name.lower():
+                result[section_name] = blocks
+                break
+    return result
+
+
+def _find_papers_dir(pdf_path: Path) -> Path:
+    """Navigate up from pdf_path to find the 'papers' directory."""
+    current = pdf_path.resolve()
+    for parent in current.parents:
+        if parent.name == "papers":
+            return parent
+    return current.parent.parent
+
+
+def slice_pdf(pdf_path: Union[str, Path], output_dir: Optional[Path] = None) -> Dict:
+    """Orchestrate extraction of text, figures, tables, and sections from a PDF."""
+    pdf_path = Path(pdf_path)
+    doc_id = generate_doc_id(pdf_path)
+
+    if output_dir is None:
+        papers_dir = _find_papers_dir(pdf_path)
+        output_dir = papers_dir / "scanned" / doc_id / "figures"
+
+    doc = fitz.open(str(pdf_path))
+    try:
+        blocks = extract_text_blocks_with_fonts(doc)
+        sections = identify_sections(blocks)
+
+        core_package = {
+            "title": extract_title(blocks),
+            "abstract": extract_section(sections, "abstract"),
+            "intro": extract_section(sections, "introduction", "intro"),
+            "conclusions": extract_section(sections, "conclusion", "conclusions"),
+            "figures": extract_all_figures(doc, output_dir),
+            "figure_captions": extract_all_captions(sections, "figure"),
+            "table_captions": extract_all_captions(sections, "table"),
+            "tables": extract_structured_tables(doc),
+        }
+
+        quant_keywords = [
+            "regression", "sharpe ratio", "alpha", "beta", "portfolio",
+            "p-value", "t-statistic", "correlation", "volatility", "arbitrage",
+            "risk-adjusted", "backtest", "factor", "empirical", "econometric",
+        ]
+        is_quant = contains_keywords(blocks, quant_keywords, threshold=3)
+
+        empirical_package = {}
+        if is_quant:
+            empirical_package = {
+                "data_section": extract_section(sections, "data"),
+                "methodology_section": extract_section(sections, "methodology", "methods", "empirical"),
+                "results_section": extract_section(sections, "results"),
+                "trading_costs": grep_keywords_in_sections(
+                    sections, ["transaction cost", "slippage", "market impact"]
+                ),
+            }
+
+        proofs_package = find_sections(sections, ["appendix", "proof", "derivation"])
+
+        return {
+            "doc_id": doc_id,
+            "filepath": str(pdf_path),
+            "core": core_package,
+            "empirical": empirical_package,
+            "proofs": proofs_package,
+            "is_likely_quant": is_quant,
+        }
+    finally:
+        doc.close()

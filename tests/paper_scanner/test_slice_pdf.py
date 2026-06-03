@@ -7,7 +7,7 @@ sys.path.insert(0, str(SKILL_SCRIPTS))
 import pytest
 import fitz
 
-from slice_pdf import extract_text_blocks_with_fonts, extract_title, identify_sections, extract_section, extract_all_figures, extract_structured_tables, contains_keywords
+from slice_pdf import extract_text_blocks_with_fonts, extract_title, identify_sections, extract_section, extract_all_figures, extract_structured_tables, contains_keywords, slice_pdf
 
 
 class TestExtractTextBlocks:
@@ -138,3 +138,34 @@ class TestContainsKeywords:
         ]
         keywords = ["regression", "sharpe ratio", "alpha", "beta", "portfolio"]
         assert contains_keywords(blocks, keywords, threshold=2) is False
+
+
+class TestSlicePdf:
+    def test_returns_complete_content_package(self, sample_pdf, scanned_dir):
+        import shutil
+        output_dir = scanned_dir / "test_slice"
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        
+        result = slice_pdf(sample_pdf, output_dir=output_dir)
+        
+        assert isinstance(result, dict)
+        assert "doc_id" in result
+        assert "filepath" in result
+        assert "core" in result
+        assert "empirical" in result
+        assert "proofs" in result
+        assert "is_likely_quant" in result
+        
+        core = result["core"]
+        assert "title" in core
+        assert "abstract" in core
+        assert "intro" in core
+        assert "conclusions" in core
+        assert "figures" in core
+        assert "figure_captions" in core
+        assert "tables" in core
+        
+        if core["figures"]:
+            for fig in core["figures"]:
+                assert "path" in fig
