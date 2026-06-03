@@ -16,6 +16,14 @@ shared_workspace/*
 !shared_workspace/papers/
 !shared_workspace/papers/scanned/
 !shared_workspace/papers/scanned/.gitkeep
+
+# Papers workspace — runtime data (PDFs, DBs, reports)
+shared_workspace/papers/raw/
+shared_workspace/papers/reports/
+shared_workspace/papers/*.db
+shared_workspace/papers/*.md
+shared_workspace/papers/*.py
+shared_workspace/papers/*.json
 data_router/cache/*.db
 
 # Agent runtime (auto-generated when containers start)
