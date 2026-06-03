@@ -11,8 +11,11 @@
 auth.json
 
 # Runtime artifacts
-shared_workspace/
+shared_workspace/*
 !shared_workspace/.gitkeep
+!shared_workspace/papers/
+!shared_workspace/papers/scanned/
+!shared_workspace/papers/scanned/.gitkeep
 data_router/cache/*.db
 
 # Agent runtime (auto-generated when containers start)
@@ -20,7 +23,11 @@ agent_configs/*/.cache/
 agent_configs/*/sessions/
 agent_configs/*/home/
 agent_configs/*/.local/
-agent_configs/*/skills/
+agent_configs/*/skills/*
+!agent_configs/paper_manager/
+!agent_configs/paper_manager/skills/
+!agent_configs/paper_manager/skills/paper-scanning/
+!agent_configs/paper_manager/skills/paper-scanning/**
 agent_configs/*/.env
 agent_configs/*/auth.json
 agent_configs/*/models_dev_cache.json
