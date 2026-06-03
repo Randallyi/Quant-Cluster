@@ -204,3 +204,28 @@ def extract_all_figures(doc: fitz.Document, output_dir: Path) -> List[Dict]:
             figure_counter += 1
 
     return figures
+
+
+def extract_structured_tables(doc: fitz.Document) -> List[Dict]:
+    """Extract all tables from all pages using PyMuPDF's table finder."""
+    tables: List[Dict] = []
+    for page_num in range(doc.page_count):
+        page = doc.load_page(page_num)
+        tablist = page.find_tables()
+        for tab in tablist.tables:
+            tables.append({
+                "headers": list(tab.header.names) if tab.header and tab.header.names else [],
+                "rows": tab.extract(),
+                "page_num": page_num + 1,
+            })
+    return tables
+
+
+def contains_keywords(blocks: List[Dict], keywords: List[str], threshold: int = 3) -> bool:
+    """Count total keyword occurrences across all block texts; return True if >= threshold."""
+    total = 0
+    for block in blocks:
+        text = block.get("text", "").lower()
+        for kw in keywords:
+            total += text.count(kw.lower())
+    return total >= threshold

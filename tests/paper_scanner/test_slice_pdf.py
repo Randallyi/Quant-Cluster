@@ -7,7 +7,7 @@ sys.path.insert(0, str(SKILL_SCRIPTS))
 import pytest
 import fitz
 
-from slice_pdf import extract_text_blocks_with_fonts, extract_title, identify_sections, extract_section, extract_all_figures
+from slice_pdf import extract_text_blocks_with_fonts, extract_title, identify_sections, extract_section, extract_all_figures, extract_structured_tables, contains_keywords
 
 
 class TestExtractTextBlocks:
@@ -103,3 +103,38 @@ class TestExtractAllFigures:
             # Cleanup
             if output_dir.exists():
                 shutil.rmtree(output_dir)
+
+
+class TestExtractStructuredTables:
+    def test_returns_list_of_tables(self, sample_pdf):
+        doc = fitz.open(str(sample_pdf))
+        try:
+            tables = extract_structured_tables(doc)
+            assert isinstance(tables, list)
+            for table in tables:
+                assert "headers" in table
+                assert "rows" in table
+                assert "page_num" in table
+                assert isinstance(table["headers"], list)
+                assert isinstance(table["rows"], list)
+                assert isinstance(table["page_num"], int)
+        finally:
+            doc.close()
+
+
+class TestContainsKeywords:
+    def test_detects_quant_keywords(self):
+        blocks = [
+            {"text": "This paper uses regression analysis and Sharpe ratio."},
+            {"text": "We calculate alpha and beta for the portfolio."},
+        ]
+        keywords = ["regression", "sharpe ratio", "alpha", "beta", "portfolio"]
+        assert contains_keywords(blocks, keywords, threshold=2) is True
+
+    def test_no_false_positives(self):
+        blocks = [
+            {"text": "This is a qualitative study about market sentiment."},
+            {"text": "We interviewed participants about their opinions."},
+        ]
+        keywords = ["regression", "sharpe ratio", "alpha", "beta", "portfolio"]
+        assert contains_keywords(blocks, keywords, threshold=2) is False
