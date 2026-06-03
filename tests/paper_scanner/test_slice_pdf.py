@@ -7,7 +7,7 @@ sys.path.insert(0, str(SKILL_SCRIPTS))
 import pytest
 import fitz
 
-from slice_pdf import extract_text_blocks_with_fonts, extract_title, identify_sections, extract_section
+from slice_pdf import extract_text_blocks_with_fonts, extract_title, identify_sections, extract_section, extract_all_figures
 
 
 class TestExtractTextBlocks:
@@ -80,3 +80,26 @@ class TestExtractSection:
             assert "Alexakis" in text or "Bouri" in text
         finally:
             doc.close()
+
+
+class TestExtractAllFigures:
+    def test_extracts_figures_to_files(self, sample_pdf, scanned_dir):
+        import shutil
+        output_dir = scanned_dir / "test_figures"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        doc = fitz.open(str(sample_pdf))
+        try:
+            figures = extract_all_figures(doc, output_dir)
+            assert isinstance(figures, list)
+            if len(figures) > 0:
+                for fig in figures:
+                    assert "path" in fig
+                    assert "page_num" in fig
+                    assert Path(fig["path"]).exists()
+                    assert Path(fig["path"]).stat().st_size > 100
+        finally:
+            doc.close()
+            # Cleanup
+            if output_dir.exists():
+                shutil.rmtree(output_dir)

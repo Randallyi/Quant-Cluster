@@ -1,5 +1,6 @@
 import re
 import statistics
+from pathlib import Path
 from typing import List, Dict
 
 import fitz
@@ -166,3 +167,40 @@ def extract_section(sections: Dict, *names: str) -> str:
                 content_blocks = sections[key][1:]  # skip header block
                 return "\n".join(b["text"] for b in content_blocks)
     return ""
+
+
+def extract_all_figures(doc: fitz.Document, output_dir: Path) -> List[Dict]:
+    """Extract all images from PDF pages and save as files."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    figures: List[Dict] = []
+    figure_counter = 1
+
+    for page_num in range(doc.page_count):
+        page = doc.load_page(page_num)
+        imglist = page.get_images(full=True)
+        for img in imglist:
+            xref = img[0]
+            pix = doc.extract_image(xref)
+            if not pix:
+                continue
+            width = pix.get("width", 0)
+            height = pix.get("height", 0)
+            if width < 100 or height < 100:
+                continue
+            ext = pix.get("ext", "png")
+            image_bytes = pix.get("image")
+            if not image_bytes:
+                continue
+            filename = f"fig_{figure_counter:03d}_page{page_num + 1}.{ext}"
+            filepath = output_dir / filename
+            with open(filepath, "wb") as f:
+                f.write(image_bytes)
+            figures.append({
+                "path": str(filepath),
+                "page_num": page_num + 1,
+                "width": width,
+                "height": height,
+            })
+            figure_counter += 1
+
+    return figures
